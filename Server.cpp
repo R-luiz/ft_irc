@@ -11,7 +11,6 @@
 #include <sstream>
 #include <algorithm>
 
-
 Server::Server(int port, const std::string& password)
     : port(port), password(password), serverSocket(-1) {}
 

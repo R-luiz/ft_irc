@@ -34,3 +34,7 @@ bool Client::isConnected() const {
     int result = recv(fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
     return !(result == 0 || (result == -1 && errno != EAGAIN && errno != EWOULDBLOCK));
 }
+
+void Client::setAuthenticated(bool auth) {
+    authenticated = auth;
+}

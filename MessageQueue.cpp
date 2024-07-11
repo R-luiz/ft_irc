@@ -1,5 +1,5 @@
-// MessageQueue.cpp
 #include "MessageQueue.hpp"
+#include <stdexcept>
 
 void MessageQueue::push(const Message& msg) {
     queue.push_back(msg);

@@ -25,6 +25,7 @@ public:
     void setPassword(const std::string& pwd);
     bool authenticate(const std::string& pwd);
     bool isConnected() const;
+    void setAuthenticated(bool auth);
 
     void sendMessage(const std::string& message);
 };

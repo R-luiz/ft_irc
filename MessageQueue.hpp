@@ -1,4 +1,3 @@
-// MessageQueue.hpp
 #ifndef MESSAGEQUEUE_HPP
 #define MESSAGEQUEUE_HPP
 
