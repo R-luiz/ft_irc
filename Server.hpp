@@ -49,10 +49,13 @@ private:
     void handleInvite(Client* client, const std::string& params);
     void handleTopic(Client* client, const std::string& params);
     void handleMode(Client* client, const std::string& params);
+    void handlePass(Client* client, const std::string& params);
 	MessageQueue messageQueue;
     void processMessageQueue();
     void queueMessage(Client* recipient, const std::string& content);
     void broadcastServerMessage(const std::string& message);
+    std::string getServerName() const;
+    std::string getServerCreationDate() const;
 };
 
 #endif

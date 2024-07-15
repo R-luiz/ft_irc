@@ -38,3 +38,11 @@ bool Client::isConnected() const {
 void Client::setAuthenticated(bool auth) {
     authenticated = auth;
 }
+
+const std::string& Client::getPassword() const {
+    return password;
+}
+
+std::string Client::getHostname() const {
+    return hostname;
+}

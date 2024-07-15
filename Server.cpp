@@ -55,6 +55,31 @@ void Server::setup() {
     fds.push_back(serverPollFd);
 }
 
+void Server::processMessage(int clientFd, const std::string& message) {
+    Client* client = getClientByFd(clientFd);
+    if (!client) return;
+
+    std::istringstream iss(message);
+    std::string command;
+    iss >> command;
+
+    std::string params;
+    std::getline(iss, params);
+    params = params.substr(params.find_first_not_of(" \t"));
+
+    handleCommand(client, command, params);
+}
+
+void Server::processMessageQueue() {
+    while (!messageQueue.empty()) {
+        Message msg = messageQueue.pop();
+        Client* recipient = msg.getRecipient();
+        if (recipient && recipient->isConnected()) {
+            recipient->sendMessage(msg.getContent());
+        }
+    }
+}
+
 void Server::run() {
     setup();
 
@@ -64,13 +89,18 @@ void Server::run() {
             throw std::runtime_error("Poll failed");
         }
 
-        if (fds[0].revents & POLLIN) {
-            handleNewConnection();
-        }
-
-        for (size_t i = 1; i < fds.size(); ++i) {
+        for (size_t i = 0; i < fds.size(); ++i) {
             if (fds[i].revents & POLLIN) {
-                handleClientMessage(fds[i].fd);
+                if (i == 0) {
+                    handleNewConnection();
+                } else {
+                    handleClientMessage(fds[i].fd);
+                }
+            }
+            if (fds[i].revents & (POLLERR | POLLHUP)) {
+                if (i != 0) {
+                    removeClient(fds[i].fd);
+                }
             }
         }
         processMessageQueue();
@@ -101,6 +131,17 @@ void Server::handleNewConnection() {
     fds.push_back(clientPollFd);
 
     std::cout << "New client connected" << std::endl;
+    newClient->sendMessage("NOTICE Auth :*** Please enter password using /PASS <password>");
+
+}
+
+void Server::handlePass(Client* client, const std::string& params) {
+    if (params.empty()) {
+        client->sendMessage("461 PASS :Not enough parameters");
+        return;
+    }
+    client->setPassword(params);
+    client->sendMessage("NOTICE Auth :Password received, please use /NICK and /USER to complete registration");
 }
 
 void Server::handleClientMessage(int clientFd) {
@@ -145,13 +186,10 @@ void Server::removeClient(int clientFd) {
     close(clientFd);
 }
 
-void Server::processMessage(int clientFd, const std::string& message) {
-    // We'll implement IRC protocol handling in the next step
-    std::cout << "Received message from client " << clientFd << ": " << message;
-}
-
 void Server::handleCommand(Client* client, const std::string& command, const std::string& params) {
-    if (command == "NICK") {
+    if (command == "PASS") {
+        handlePass(client, params);
+    } else if (command == "NICK") {
         handleNick(client, params);
     } else if (command == "USER") {
         handleUser(client, params);
@@ -184,13 +222,13 @@ void Server::handleUser(Client* client, const std::string& params) {
     std::getline(iss, realname);
     realname = realname.substr(realname.find_first_not_of(" :"));
 
-    if (username.empty() || realname.empty()) {
-        client->sendMessage("461 USER :Not enough parameters");
+    if (client->getPassword().empty() || client->getPassword() != this->password) {
+        client->sendMessage("464 :Password incorrect or not provided");
+        removeClient(client->getFd());
         return;
     }
 
     client->setUsername(username);
-    // You might want to store the realname as well
     authenticateClient(client);
 }
 
@@ -198,11 +236,21 @@ void Server::handlePing(Client* client, const std::string& token) {
     client->sendMessage("PONG :" + token);
 }
 
+std::string Server::getServerName() const {
+    return "MyIRCServer";
+}
+
+std::string Server::getServerCreationDate() const {
+    return "15-07-2024";
+}
+
 void Server::authenticateClient(Client* client) {
     if (!client->isAuthenticated() && !client->getNickname().empty() && !client->getUsername().empty()) {
         client->setAuthenticated(true);
-        client->sendMessage("001 " + client->getNickname() + " :Welcome to the IRC server");
-        // Send other welcome messages (002, 003, 004, etc.)
+        client->sendMessage("001 " + client->getNickname() + " :Welcome to the IRC server, " + client->getNickname() + "!" + client->getUsername() + "@" + client->getHostname());
+        client->sendMessage("002 " + client->getNickname() + " :Your host is " + getServerName() + ", running version 1.0");
+        client->sendMessage("003 " + client->getNickname() + " :This server was created " + getServerCreationDate());
+        client->sendMessage("004 " + client->getNickname() + " " + getServerName() + " 1.0 io mtk");
     }
 }
 void Server::handleNick(Client* client, const std::string& nickname) {
@@ -573,15 +621,6 @@ void Server::broadcastServerMessage(const std::string& message) {
     }
 }
 
-void Server::processMessageQueue() {
-    while (!messageQueue.empty()) {
-        Message msg = messageQueue.pop();
-        Client* recipient = msg.getRecipient();
-        if (recipient && recipient->isConnected()) {
-            recipient->sendMessage(msg.getContent());
-        }
-    }
-}
 
 void Server::queueMessage(Client* recipient, const std::string& content) {
     messageQueue.push(Message(recipient, content));
