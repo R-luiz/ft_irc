@@ -1,13 +1,35 @@
 
 #include "Server.hpp"
 
+Client::Client() {}
+
+void Client::setIpAdd(std::string ipadd)
+{
+	IPadd = ipadd;
+}
+
+void Client::setFd(int fd)
+{
+	Fd = fd;
+}
+
+int Client::getFd()
+{
+	return Fd;
+}
+
+Server::Server()
+{
+	SerSocketFd = -1;
+}
+
 void Server::ClearClients(int fd){ //-> clear the clients
 	for(size_t i = 0; i < fds.size(); i++){ //-> remove the client from the pollfd
 		if (fds[i].fd == fd)
 			{fds.erase(fds.begin() + i); break;}
 	}
 	for(size_t i = 0; i < clients.size(); i++){ //-> remove the client from the vector of clients
-		if (clients[i].GetFd() == fd)
+		if (clients[i].getFd() == fd)
 			{clients.erase(clients.begin() + i); break;}
 	}
 
@@ -15,7 +37,7 @@ void Server::ClearClients(int fd){ //-> clear the clients
 
 void Server::CloseFds(){ //-> close the file descriptors
 	for(size_t i = 0; i < clients.size(); i++){ //-> close the file descriptors of the clients
-		close(clients[i].GetFd());
+		close(clients[i].getFd());
 	}
 	if (SerSocketFd != -1) //-> close the server socket file descriptor
 		close(SerSocketFd);
