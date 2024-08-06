@@ -24,27 +24,35 @@ Server::Server()
 }
 
 void Server::ClearClients(int fd){ //-> clear the clients
-	for(size_t i = 0; i < fds.size(); i++){ //-> remove the client from the pollfd
+	for(size_t i = 0; i < fds.size(); i++)//-> remove the client from the pollfd
+	{ 
 		if (fds[i].fd == fd)
-			{fds.erase(fds.begin() + i); break;}
+		{
+			fds.erase(fds.begin() + i); 
+			break;
+		}
 	}
-	for(size_t i = 0; i < clients.size(); i++){ //-> remove the client from the vector of clients
+	for(size_t i = 0; i < clients.size(); i++)
+	{ //-> remove the client from the vector of clients
 		if (clients[i].getFd() == fd)
-			{clients.erase(clients.begin() + i); break;}
+		{
+			clients.erase(clients.begin() + i); 
+			break;
+		}
 	}
 
 }
 
 void Server::CloseFds(){ //-> close the file descriptors
-	for(size_t i = 0; i < clients.size(); i++){ //-> close the file descriptors of the clients
+	for(size_t i = 0; i < clients.size(); i++)//-> close the file descriptors of the clients
 		close(clients[i].getFd());
-	}
 	if (SerSocketFd != -1) //-> close the server socket file descriptor
 		close(SerSocketFd);
 }
 
 bool Server::Signal = false; //-> initialize the static boolean
-void Server::SignalHandler(int signum){ //-> signal handler
+void Server::SignalHandler(int signum) //-> signal handler
+{ 
 	std::cout << RED << "Signal " << signum << " received" << WHI << std::endl;
 	Signal = true;
 }
