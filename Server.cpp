@@ -102,30 +102,125 @@ void Server::AcceptNewClient()
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
 
+void Server::PrintUserParts(User user) {
+	std::cout << "--> User parts:" << std::endl;
+	std::cout << "--> Nick: " << user.getNick() << std::endl;
+	std::cout << "--> Username: " << user.getUser() << std::endl;
+	std::cout << "--> Hostname: " << user.getHostname() << std::endl;
+	std::cout << "--> Fd: " << user.getFd() << std::endl;
+	std::cout << "--> End of user parts" << std::endl;
+}
+
+User::User() {}
+
+User::User(std::string nick, std::string user, std::string pass) {
+	nickname = nick;
+	username = user;
+	password = pass;
+}
+
+User::~User() {}
+
+std::string User::getNick() {
+	return nickname;
+}
+
+std::string User::getUser() {
+	return username;
+}
+
+std::string User::getPass() {
+	return password;
+}
+
+std::string User::getHostname() {
+	return hostname;
+}
+
+int User::getFd() {
+	return fd;
+}
+
+void User::setNick(std::string nick) {
+	nickname = nick;
+}
+
+void User::setUser(std::string user) {
+	username = user;
+}
+
+void User::setPass(std::string pass) {
+	password = pass;
+}
+
+void User::setHostname(std::string host) {
+	hostname = host;
+}
+
+void User::setFd(int fd) {
+	this->fd = fd;
+}
+
+void Server::ProcessClientInput(const char *buff, int fd) 
+{
+	std::string input(buff);
+        std::istringstream iss(input);
+        std::string line;
+        
+        while (std::getline(iss, line)) {
+            if (line.find("CAP LS") != std::string::npos) {
+                // Handle capability negotiation
+                send(fd, "CAP * LS :\r\n", 12, 0);
+            }
+            else if (line.find("NICK") == 0) {
+                // Extract nickname
+                std::string nick = line.substr(5); // Assumes "NICK " is always 5 characters
+                // Handle nickname setting
+                // setClientNickname(fd, nick);
+            }
+            else if (line.find("USER") == 0) {
+                // Extract USER information
+                std::istringstream userStream(line);
+                std::vector<std::string> userParts;
+                std::string part;
+                while (userStream >> part) {
+                    userParts.push_back(part);
+                }
+				User user = User();
+				user.setNick(userParts[1]);
+				user.setUser(userParts[2]);
+				user.setHostname(userParts[3]);
+				user.setFd(fd);
+				user.setPass("password123");
+				users.push_back(user);
+				// Print user parts
+				PrintUserParts(user);
+            }
+        }
+}
+
 void Server::ReceiveNewData(int fd)
 {
-	char buff[1024]; //-> buffer for the received data
-	memset(buff, 0, sizeof(buff)); //-> clear the buffer
-
+	char buff[1024]; //-> create a buffer to store the received data
 	ssize_t bytes = recv(fd, buff, sizeof(buff) - 1 , 0); //-> receive the data
-
 	if(bytes <= 0){ //-> check if the client disconnected
 		std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
 		ClearClients(fd); //-> clear the client
 		close(fd); //-> close the client socket
 	}
-
 	else{ //-> print the received data
 		buff[bytes] = '\0';
 		std::cout << YEL << "Client <" << fd << "> Data: " << WHI << buff;
+		ProcessClientInput(buff, fd);
 		//here you can add your code to process the received data: parse, check, authenticate, handle the command, etc...
 	}
 }
 
-void Server::ServerInit()
+void Server::ServerInit(int port, std::string pass)
 {
-	this->Port = 4444;
-	SerSocket(); //-> create the server socket
+	this->Port = port; //-> set the server port
+	this->Pass = pass; //-> set the server password
+	this->SerSocket(); //-> create the server socket
 
 	std::cout << GRE << "Server <" << SerSocketFd << "> Connected" << WHI << std::endl;
 	std::cout << "Waiting to accept a connection...\n";
@@ -148,14 +243,26 @@ void Server::ServerInit()
 	CloseFds(); //-> close the file descriptors when the server stops
 }
 
-int main()
+bool isPortValid(std::string port){
+	return (port.find_first_not_of("0123456789") == std::string::npos && \
+	std::atoi(port.c_str()) >= 1024 && std::atoi(port.c_str()) <= 65535);
+}
+
+int main(int argc, char *argv[])
 {
+	if (argc != 3 || !isPortValid(argv[1])) //-> check the number of arguments and the port
+	{
+		std::cerr << "Usage: " << argv[0] << " <port> <password>" << std::endl;
+		return 1;
+	}
 	Server ser;
 	std::cout << "---- SERVER ----" << std::endl;
+	int port = std::atoi(argv[1]); //-> convert the port to integer
+	std::string pass = argv[2]; //-> get the password
 	try{
 		signal(SIGINT, Server::SignalHandler); //-> catch the signal (ctrl + c)
 		signal(SIGQUIT, Server::SignalHandler); //-> catch the signal (ctrl + \)
-		ser.ServerInit(); //-> initialize the server
+		ser.ServerInit(port, pass); //-> initialize the server
 	}
 	catch(const std::exception& e){
 		ser.CloseFds(); //-> close the file descriptors
