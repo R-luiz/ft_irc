@@ -9,6 +9,9 @@
 #include <poll.h> //-> for poll()
 #include <csignal> //-> for signal()
 #include <cstring> //-> for memset()
+#include <string> //-> for string
+#include <cstdlib> //-> for atoi()
+
 //-------------------------------------------------------//
 #define RED "\e[1;31m" //-> for red color
 #define WHI "\e[0;37m" //-> for white color
