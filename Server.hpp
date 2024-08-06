@@ -32,6 +32,7 @@ class Server //-> class for server
 {
 	private:
 		int Port; //-> server port
+		std::string Pass; //-> server password
 		int SerSocketFd; //-> server socket file descriptor
 		static bool Signal; //-> static boolean for signal
 		std::vector<Client> clients; //-> vector of clients
@@ -39,7 +40,7 @@ class Server //-> class for server
 	public:
 		Server(); //-> default constructor
 
-		void ServerInit(); //-> server initialization
+		void ServerInit(int port, std::string pass); //-> server initialization
 		void SerSocket(); //-> server socket creation
 		void AcceptNewClient(); //-> accept new client
 		void ReceiveNewData(int fd); //-> receive new data from a registered client

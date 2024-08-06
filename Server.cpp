@@ -122,10 +122,11 @@ void Server::ReceiveNewData(int fd)
 	}
 }
 
-void Server::ServerInit()
+void Server::ServerInit(int port, std::string pass)
 {
-	this->Port = 4444;
-	SerSocket(); //-> create the server socket
+	this->Port = port; //-> set the server port
+	this->Pass = pass; //-> set the server password
+	this->SerSocket(); //-> create the server socket
 
 	std::cout << GRE << "Server <" << SerSocketFd << "> Connected" << WHI << std::endl;
 	std::cout << "Waiting to accept a connection...\n";
@@ -148,14 +149,26 @@ void Server::ServerInit()
 	CloseFds(); //-> close the file descriptors when the server stops
 }
 
-int main()
+bool isPortValid(std::string port){
+	return (port.find_first_not_of("0123456789") == std::string::npos && \
+	std::atoi(port.c_str()) >= 1024 && std::atoi(port.c_str()) <= 65535);
+}
+
+int main(int argc, char *argv[])
 {
+	if (argc != 3 || !isPortValid(argv[1])) //-> check the number of arguments and the port
+	{
+		std::cerr << "Usage: " << argv[0] << " <port> <password>" << std::endl;
+		return 1;
+	}
 	Server ser;
 	std::cout << "---- SERVER ----" << std::endl;
+	int port = std::atoi(argv[1]); //-> convert the port to integer
+	std::string pass = argv[2]; //-> get the password
 	try{
 		signal(SIGINT, Server::SignalHandler); //-> catch the signal (ctrl + c)
 		signal(SIGQUIT, Server::SignalHandler); //-> catch the signal (ctrl + \)
-		ser.ServerInit(); //-> initialize the server
+		ser.ServerInit(port, pass); //-> initialize the server
 	}
 	catch(const std::exception& e){
 		ser.CloseFds(); //-> close the file descriptors
