@@ -1,22 +1,7 @@
 
 #include "Server.hpp"
 
-Client::Client() {}
 
-void Client::setIpAdd(std::string ipadd)
-{
-	IPadd = ipadd;
-}
-
-void Client::SetFd(int fd)
-{
-	Fd = fd;
-}
-
-int Client::getFd()
-{
-	return Fd;
-}
 
 Server::Server()
 {
@@ -119,55 +104,6 @@ void Server::PrintUserParts(User user) {
 	std::cout << "--> End of user parts" << std::endl;
 }
 
-User::User() {}
-
-User::User(std::string nick, std::string user, std::string pass) {
-	nickname = nick;
-	username = user;
-	password = pass;
-}
-
-User::~User() {}
-
-std::string User::getNick() {
-	return nickname;
-}
-
-std::string User::getUser() {
-	return username;
-}
-
-std::string User::getPass() {
-	return password;
-}
-
-std::string User::getHostname() {
-	return hostname;
-}
-
-int User::getFd() {
-	return fd;
-}
-
-void User::setNick(std::string nick) {
-	nickname = nick;
-}
-
-void User::setUser(std::string user) {
-	username = user;
-}
-
-void User::setPass(std::string pass) {
-	password = pass;
-}
-
-void User::setHostname(std::string host) {
-	hostname = host;
-}
-
-void User::setFd(int fd) {
-	this->fd = fd;
-}
 
 void Server::ProcessClientInput(const char *buff, int fd) 
 {
