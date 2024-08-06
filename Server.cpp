@@ -102,22 +102,67 @@ void Server::AcceptNewClient()
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
 
+void Server::PrintUserParts(const std::vector<std::string> &userParts) 
+{
+	std::cout << "--> User parts:" << std::endl;
+	std::vector<std::string>::const_iterator it;
+	for (it = userParts.begin(); it != userParts.end(); ++it) {
+		std::cout << "--> " << *it << std::endl;
+	}
+	std::cout << "--> End of user parts" << std::endl;
+}
+
+void Server::ProcessClientInput(const char *buff, int fd) 
+{
+	std::string input(buff);
+        std::istringstream iss(input);
+        std::string line;
+        
+        while (std::getline(iss, line)) {
+            if (line.find("CAP LS") != std::string::npos) {
+                // Handle capability negotiation
+                send(fd, "CAP * LS :\r\n", 12, 0);
+            }
+            else if (line.find("NICK") == 0) {
+                // Extract nickname
+                std::string nick = line.substr(5); // Assumes "NICK " is always 5 characters
+                // Handle nickname setting
+                // setClientNickname(fd, nick);
+            }
+            else if (line.find("USER") == 0) {
+                // Extract USER information
+                std::istringstream userStream(line);
+                std::vector<std::string> userParts;
+                std::string part;
+                while (userStream >> part) {
+                    userParts.push_back(part);
+                }
+                if (userParts.size() >= 5) {
+                    std::string username = userParts[1];
+                    std::string hostname = userParts[3];
+                    std::string::size_type pos = line.find(':');
+                    std::string realname = (pos != std::string::npos) ? line.substr(pos + 1) : "";
+                    // Handle user registration
+                    // Example: registerUser(fd, username, hostname, realname);
+				PrintUserParts(userParts);
+                }
+            }
+        }
+}
+
 void Server::ReceiveNewData(int fd)
 {
-	char buff[1024]; //-> buffer for the received data
-	memset(buff, 0, sizeof(buff)); //-> clear the buffer
-
+	char buff[1024]; //-> create a buffer to store the received data
 	ssize_t bytes = recv(fd, buff, sizeof(buff) - 1 , 0); //-> receive the data
-
 	if(bytes <= 0){ //-> check if the client disconnected
 		std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
 		ClearClients(fd); //-> clear the client
 		close(fd); //-> close the client socket
 	}
-
 	else{ //-> print the received data
 		buff[bytes] = '\0';
 		std::cout << YEL << "Client <" << fd << "> Data: " << WHI << buff;
+		ProcessClientInput(buff, fd);
 		//here you can add your code to process the received data: parse, check, authenticate, handle the command, etc...
 	}
 }
