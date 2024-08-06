@@ -47,7 +47,7 @@ void Server::SerSocket()
 	if (bind(SerSocketFd, (struct sockaddr *)&add, sizeof(add)) == -1) //-> bind the socket to the address
 		throw(std::runtime_error("faild to bind socket"));
 	if (listen(SerSocketFd, SOMAXCONN) == -1) //-> listen for incoming connections and making the socket a passive socket
-		throw(std::runtime_error("listen() faild"));
+		throw(std::runtime_error("listen() failed"));
 
 	NewPoll.fd = SerSocketFd; //-> add the server socket to the pollfd
 	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
