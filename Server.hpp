@@ -8,6 +8,7 @@
 #include <arpa/inet.h> //-> for inet_ntoa()
 #include <poll.h> //-> for poll()
 #include <csignal> //-> for signal()
+#include <cstring> //-> for memset()
 //-------------------------------------------------------//
 #define RED "\e[1;31m" //-> for red color
 #define WHI "\e[0;37m" //-> for white color
@@ -23,7 +24,7 @@ class Client //-> class for client
 		Client(); //-> default constructor
 		int getFd(); //-> getter for fd
 
-		void setFd(int fd); //-> setter for fd
+		void SetFd(int fd); //-> setter for fd
 		void setIpAdd(std::string ipadd); //-> setter for ipadd
 };
 
