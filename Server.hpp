@@ -1,56 +1,50 @@
-#ifndef SERVER_HPP
-#define SERVER_HPP
-
-#include <string>
-#include <vector>
-#include <map>
-#include <poll.h>
 #include <iostream>
-#include <sstream>
-#include <cstring>
-#include <cerrno>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-class Client;
-class Channel;
-
-class Server {
+#include <vector> //-> for vector
+#include <sys/socket.h> //-> for socket()
+#include <sys/types.h> //-> for socket()
+#include <netinet/in.h> //-> for sockaddr_in
+#include <fcntl.h> //-> for fcntl()
+#include <unistd.h> //-> for close()
+#include <arpa/inet.h> //-> for inet_ntoa()
+#include <poll.h> //-> for poll()
+#include <csignal> //-> for signal()
+//-------------------------------------------------------//
+#define RED "\e[1;31m" //-> for red color
+#define WHI "\e[0;37m" //-> for white color
+#define GRE "\e[1;32m" //-> for green color
+#define YEL "\e[1;33m" //-> for yellow color
+//-------------------------------------------------------//
+class Client //-> class for client
+{
 private:
-    int serverSocket;
-    int port;
-    std::string password;
-    std::vector<pollfd> fds;
-    std::map<int, Client*> clients;
-    std::map<std::string, Channel*> channels;
-
-    void setup();
-    void handleNewConnection();
-    void handleClientMessage(int clientFd);
-    void removeClient(int clientFd);
-    void processCommand(Client* client, const std::string& message);
-
-    // Mandatory command handlers
-    void handlePass(Client* client, const std::string& params);
-    void handleNick(Client* client, const std::string& params);
-    void handleUser(Client* client, const std::string& params);
-    void handleJoin(Client* client, const std::string& params);
-    void handlePrivmsg(Client* client, const std::string& params);
-    void handleKick(Client* client, const std::string& params);
-    void handleInvite(Client* client, const std::string& params);
-    void handleTopic(Client* client, const std::string& params);
-    void handleMode(Client* client, const std::string& params);
-
-    Channel* getChannel(const std::string& channelName);
-    void broadcastToChannel(const Channel* channel, const std::string& message, Client* exclude = nullptr);
-
+	int Fd; //-> client file descriptor
+	std::string IPadd; //-> client ip address
 public:
-    Server(int port, const std::string& password);
-    ~Server();
+	Client(){}; //-> default constructor
+	int GetFd(){return Fd;} //-> getter for fd
 
-    void run();
+	void SetFd(int fd){Fd = fd;} //-> setter for fd
+	void setIpAdd(std::string ipadd){IPadd = ipadd;} //-> setter for ipadd
 };
 
-#endif // SERVER_HPP
+class Server //-> class for server
+{
+private:
+	int Port; //-> server port
+	int SerSocketFd; //-> server socket file descriptor
+	static bool Signal; //-> static boolean for signal
+	std::vector<Client> clients; //-> vector of clients
+	std::vector<struct pollfd> fds; //-> vector of pollfd
+public:
+	Server(){SerSocketFd = -1;} //-> default constructor
+
+	void ServerInit(); //-> server initialization
+	void SerSocket(); //-> server socket creation
+	void AcceptNewClient(); //-> accept new client
+	void ReceiveNewData(int fd); //-> receive new data from a registered client
+
+	static void SignalHandler(int signum); //-> signal handler
+ 
+	void CloseFds(); //-> close file descriptors
+	void ClearClients(int fd); //-> clear clients
+};
