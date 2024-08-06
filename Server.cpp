@@ -102,14 +102,63 @@ void Server::AcceptNewClient()
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
 
-void Server::PrintUserParts(const std::vector<std::string> &userParts) 
-{
+void Server::PrintUserParts(User user) {
 	std::cout << "--> User parts:" << std::endl;
-	std::vector<std::string>::const_iterator it;
-	for (it = userParts.begin(); it != userParts.end(); ++it) {
-		std::cout << "--> " << *it << std::endl;
-	}
+	std::cout << "--> Nick: " << user.getNick() << std::endl;
+	std::cout << "--> Username: " << user.getUser() << std::endl;
+	std::cout << "--> Hostname: " << user.getHostname() << std::endl;
+	std::cout << "--> Fd: " << user.getFd() << std::endl;
 	std::cout << "--> End of user parts" << std::endl;
+}
+
+User::User() {}
+
+User::User(std::string nick, std::string user, std::string pass) {
+	nickname = nick;
+	username = user;
+	password = pass;
+}
+
+User::~User() {}
+
+std::string User::getNick() {
+	return nickname;
+}
+
+std::string User::getUser() {
+	return username;
+}
+
+std::string User::getPass() {
+	return password;
+}
+
+std::string User::getHostname() {
+	return hostname;
+}
+
+int User::getFd() {
+	return fd;
+}
+
+void User::setNick(std::string nick) {
+	nickname = nick;
+}
+
+void User::setUser(std::string user) {
+	username = user;
+}
+
+void User::setPass(std::string pass) {
+	password = pass;
+}
+
+void User::setHostname(std::string host) {
+	hostname = host;
+}
+
+void User::setFd(int fd) {
+	this->fd = fd;
 }
 
 void Server::ProcessClientInput(const char *buff, int fd) 
@@ -137,15 +186,15 @@ void Server::ProcessClientInput(const char *buff, int fd)
                 while (userStream >> part) {
                     userParts.push_back(part);
                 }
-                if (userParts.size() >= 5) {
-                    std::string username = userParts[1];
-                    std::string hostname = userParts[3];
-                    std::string::size_type pos = line.find(':');
-                    std::string realname = (pos != std::string::npos) ? line.substr(pos + 1) : "";
-                    // Handle user registration
-                    // Example: registerUser(fd, username, hostname, realname);
-				PrintUserParts(userParts);
-                }
+				User user = User();
+				user.setNick(userParts[1]);
+				user.setUser(userParts[2]);
+				user.setHostname(userParts[3]);
+				user.setFd(fd);
+				user.setPass("password123");
+				users.push_back(user);
+				// Print user parts
+				PrintUserParts(user);
             }
         }
 }

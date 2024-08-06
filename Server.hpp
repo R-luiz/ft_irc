@@ -25,18 +25,22 @@ class User //-> class for user
 		std::string nickname;
 		std::string username;
 		std::string password;
+		std::string hostname;
 		int fd;
 	public:
 		User(); //-> default constructor
 		User(std::string nick, std::string user, std::string pass); //-> constructor with parameters
+		~User(); //-> destructor
 		std::string getNick(); //-> getter for nickname
 		std::string getUser(); //-> getter for username
 		std::string getPass(); //-> getter for password
+		std::string getHostname(); //-> getter for hostname
 		int getFd(); //-> getter for fd
 		void setNick(std::string nick); //-> setter for nickname
 		void setUser(std::string user); //-> setter for username
 		void setPass(std::string pass); //-> setter for password
 		void setFd(int fd); //-> setter for fd
+		void setHostname(std::string host); //-> setter for hostname
 };
 
 //-------------------------------------------------------//
@@ -72,7 +76,7 @@ class Server //-> class for server
 		void ReceiveNewData(int fd); //-> receive new data from a registered client
 		void ProcessClientInput(const char *buff, int id); //-> process the client input
 		static void SignalHandler(int signum); //-> signal handler
-		void PrintUserParts(const std::vector<std::string> &userParts);
+		void PrintUserParts(User user); //-> print user parts
 		void CloseFds(); //-> close file descriptors
 		void ClearClients(int fd); //-> clear clients
 };
