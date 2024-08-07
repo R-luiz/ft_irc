@@ -167,6 +167,39 @@ void Server::setClientUsername(int fd, const std::string& username, const std::s
     send(fd, response.c_str(), response.length(), 0);
 }
 
+void Server::handlePrivmsg(int senderFd, const std::string& target, const std::string& message)
+{
+    Client* sender = getClientByFd(senderFd);
+    if (!sender || !sender->getUser()) {
+        std::cerr << "Error: Invalid sender" << std::endl;
+        return;
+    }
+
+    if (target[0] == '#') {
+        // Channel message
+        Channel* channel = getChannel(target);
+        if (channel) {
+            if (channel->hasUser(sender->getUser())) {
+                std::string fullMessage = ":" + sender->getUser()->getNick() + "!" +
+                                          sender->getUser()->getUser() + "@" +
+                                          sender->getUser()->getHostname() +
+                                          " PRIVMSG " + target + " :" + message + "\r\n";
+                channel->broadcastMessage(fullMessage, sender->getUser());
+            } else {
+                std::string error = ":server 404 " + sender->getUser()->getNick() + " " + target + " :Cannot send to channel\r\n";
+                send(senderFd, error.c_str(), error.length(), 0);
+            }
+        } else {
+            std::string error = ":server 403 " + sender->getUser()->getNick() + " " + target + " :No such channel\r\n";
+            send(senderFd, error.c_str(), error.length(), 0);
+        }
+    } else {
+        // Private message (not implemented in this example)
+        std::string error = ":server 401 " + sender->getUser()->getNick() + " " + target + " :No such nick/channel\r\n";
+        send(senderFd, error.c_str(), error.length(), 0);
+    }
+}
+
 void Server::processClientInput(const char *buff, int fd)
 {
     std::string input(buff);
@@ -243,6 +276,12 @@ void Server::processClientInput(const char *buff, int fd)
     std::string channelName;
     iss >> channelName;
     handleJoin(fd, channelName);
+    }
+    else if (command == "PRIVMSG") {
+        std::string target, message;
+        iss >> target;
+        std::getline(iss >> std::ws, message);
+        handlePrivmsg(fd, target, message);
     }
     else {
         std::string error = "421 * " + command + " :Unknown command\r\n";

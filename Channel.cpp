@@ -45,22 +45,20 @@ void Channel::setOperator(User* user, bool status) {
     operators[user] = status;
 }
 
-void Channel::broadcastMessage(const std::string& message, User* sender) {
-    std::vector<User*>::iterator it;
-    for (it = users.begin(); it != users.end(); ++it) {
-        User* user = *it;
-        if (user != sender) {
-            int userFd = user->getFd();
+void Channel::broadcastMessage(const std::string& message, User* sender)
+{
+    for (std::vector<User*>::iterator it = users.begin(); it != users.end(); ++it) {
+        if (*it != sender) {
+            int userFd = (*it)->getFd();
             if (userFd != -1) {
-                ssize_t bytesSent = send(userFd, message.c_str(), message.length(), 0);
-                if (bytesSent == -1) {
-                    std::cerr << "Error sending message to user " << user->getNick() << std::endl;
-                } else if (bytesSent < static_cast<ssize_t>(message.length())) {
-                    std::cerr << "Incomplete message sent to user " << user->getNick() << std::endl;
+                ssize_t sent = send(userFd, message.c_str(), message.length(), 0);
+                if (sent == -1) {
+                    std::cerr << "Error sending message to user " << (*it)->getNick() << std::endl;
+                } else if (static_cast<size_t>(sent) < message.length()) {
+                    std::cerr << "Incomplete message sent to user " << (*it)->getNick() << std::endl;
                 }
-            } else {
-                std::cerr << "Invalid file descriptor for user " << user->getNick() << std::endl;
             }
         }
     }
 }
+

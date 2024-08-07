@@ -73,6 +73,7 @@ class Server //-> class for server
 		Channel *getChannel(const std::string& channelName); //-> get channel
 		void disconnectClient(int fd); //-> disconnect client
 		void checkRegistration(Client* client); //-> check registration
+		void handlePrivmsg(int senderFd, const std::string& target, const std::string& message);
 };
 
 #endif
