@@ -109,36 +109,60 @@ void Server::ProcessClientInput(const char *buff, int fd)
 {
 	std::string input(buff);
         std::istringstream iss(input);
-        std::string line;
+        std::string command;
         
-        while (std::getline(iss, line)) {
-            if (line.find("CAP LS") != std::string::npos) {
-                // Handle capability negotiation
-                send(fd, "CAP * LS :\r\n", 12, 0);
+        while (iss >> command) {
+            if (command == "CAP") {
+                std::string capCommand;
+				iss >> capCommand;
+				if (capCommand == "LS")
+                	send(fd, "CAP * LS :\r\n", 12, 0);
             }
-            else if (line.find("NICK") == 0) {
+            else if (command == "NICK") {
                 // Extract nickname
-                std::string nick = line.substr(5); // Assumes "NICK " is always 5 characters
+
+                std::string nick;
+				iss >> nick;
                 // Handle nickname setting
                 // setClientNickname(fd, nick);
             }
-            else if (line.find("USER") == 0) {
+            else if (command == "USER") {
                 // Extract USER information
-                std::istringstream userStream(line);
                 std::vector<std::string> userParts;
                 std::string part;
-                while (userStream >> part) {
-                    userParts.push_back(part);
-                }
-				User user = User();
-				user.setNick(userParts[1]);
-				user.setUser(userParts[2]);
-				user.setHostname(userParts[3]);
-				user.setFd(fd);
-				user.setPass("password123");
-				users.push_back(user);
-				// Print user parts
-				PrintUserParts(user);
+                for (int i = 0; i < 4 && iss >> part; ++i) {
+					userParts.push_back(part);
+				}
+				std::string realname;
+				std::getline(iss >> std::ws, realname);
+				if (!realname.empty() && realname[0] == ':') {
+					realname = realname.substr(1);  // Remove leading ':'
+				}
+				if (userParts.size() >= 4) {
+					std::vector<User>::iterator it;
+					for (it = users.begin(); it != users.end(); ++it) {
+						if (it->getFd() == fd) {
+							break;
+						}
+					}
+					if (it != users.end()) {
+						// Update existing user
+						it->setUser(userParts[1]);
+						it->setHostname(userParts[2]);
+						it->setRealName(realname);
+						PrintUserParts(*it);
+					} else {
+						// Create new user
+						User user;
+						user.setUser(userParts[1]);
+						user.setHostname(userParts[2]);
+						user.setRealName(realname);
+						user.setFd(fd);
+						user.setPass("password123");
+						users.push_back(user);
+						PrintUserParts(user);
+					}
+				}
             }
         }
 }
@@ -192,7 +216,7 @@ void Server::ServerInit(int port, std::string pass)
 bool isPortValid(std::string port)
 {
 	return (port.find_first_not_of("0123456789") == std::string::npos && \
-	std::atoi(port.c_str()) >= 1024 && std::atoi(port.c_str()) <= 65535);
+	std::atoi(port.c_str()) >= 1024 && std::atoi(port.c_str()) <= 49152);
 }
 
 int main(int argc, char *argv[])

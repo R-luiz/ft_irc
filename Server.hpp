@@ -25,6 +25,8 @@
 #define YEL "\e[1;33m" //-> for yellow color
 
 //-------------------------------------------------------//
+class Client; //-> forward declaration
+class User; //-> forward declaration
 
 class Server //-> class for server
 {

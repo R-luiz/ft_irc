@@ -49,3 +49,11 @@ void User::setHostname(std::string host) {
 void User::setFd(int fd) {
 	this->fd = fd;
 }
+
+void User::setRealName(std::string real) {
+	realname = real;
+}
+
+std::string User::getRealName() {
+	return realname;
+}
