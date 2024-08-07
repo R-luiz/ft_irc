@@ -2,10 +2,9 @@
 
 User::User() {}
 
-User::User(std::string nick, std::string user, std::string pass) {
+User::User(std::string nick, std::string user) {
 	nickname = nick;
 	username = user;
-	password = pass;
 }
 
 User::~User() {}
@@ -16,10 +15,6 @@ std::string User::getNick() {
 
 std::string User::getUser() {
 	return username;
-}
-
-std::string User::getPass() {
-	return password;
 }
 
 std::string User::getHostname() {
@@ -36,10 +31,6 @@ void User::setNick(std::string nick) {
 
 void User::setUser(std::string user) {
 	username = user;
-}
-
-void User::setPass(std::string pass) {
-	password = pass;
 }
 
 void User::setHostname(std::string host) {

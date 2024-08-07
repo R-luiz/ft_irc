@@ -69,6 +69,18 @@ void Server::SerSocket()
 	NewPoll.revents = 0; //-> set the revents to 0
 	fds.push_back(NewPoll); //-> add the server socket to the pollfd
 }
+void Server::sendWelcomeMessages(int fd, const std::string& nickname) {
+    std::string welcome = "001 " + nickname + " :Welcome to the IRC Network\r\n";
+    std::string yourHost = "002 " + nickname + " :Your host is yourservername, running version 1.0\r\n";
+    std::string created = "003 " + nickname + " :This server was created sometime\r\n";
+    std::string myInfo = "004 " + nickname + " yourservername 1.0 o o\r\n";
+
+    send(fd, welcome.c_str(), welcome.length(), 0);
+    send(fd, yourHost.c_str(), yourHost.length(), 0);
+    send(fd, created.c_str(), created.length(), 0);
+    send(fd, myInfo.c_str(), myInfo.length(), 0);
+}
+
 void Server::AcceptNewClient()
 {
 	Client cli; //-> create a new client
@@ -93,6 +105,7 @@ void Server::AcceptNewClient()
 	fds.push_back(NewPoll); //-> add the client socket to the pollfd
 
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
+	sendWelcomeMessages(incofd, "test");
 }
 
 void Server::PrintUserParts(User user) {
@@ -104,86 +117,184 @@ void Server::PrintUserParts(User user) {
 	std::cout << "--> End of user parts" << std::endl;
 }
 
+void Server::auth(int fd, std::string pass){
+	std::vector<User>::iterator it;
+	for (it = users.begin(); it != users.end(); ++it) {
+		if (it->getFd() == fd) {
+			break;
+		}
+	}
+	(void)pass;
+}
 
-void Server::ProcessClientInput(const char *buff, int fd) 
+void Server::ProcessClientInput(const char *buff, int fd)
 {
-	std::string input(buff);
-        std::istringstream iss(input);
-        std::string command;
-        
-        while (iss >> command) {
-            if (command == "CAP") {
-                std::string capCommand;
-				iss >> capCommand;
-				if (capCommand == "LS")
-                	send(fd, "CAP * LS :\r\n", 12, 0);
+    std::string input(buff);
+    std::istringstream iss(input);
+    std::string command;
+	std::cout << "received: " << input << std::endl;
+    while (iss >> command) {
+        if (command == "CAP") {
+            std::string capCommand;
+            iss >> capCommand;
+            if (capCommand == "LS")
+                send(fd, "CAP * LS :\r\n", 12, 0);
+            else if (capCommand == "END")
+                send(fd, "CAP * ACK :multi-prefix\r\n", 25, 0);
+        }
+        else if (command == "NICK") {
+            std::string nick;
+            iss >> nick;
+            setClientNickname(fd, nick);
+        }
+        else if (command == "USER") {
+            // Extract USER information
+            std::vector<std::string> userParts;
+            std::string part;
+            for (int i = 0; i < 4 && iss >> part; ++i) {
+                userParts.push_back(part);
             }
-            else if (command == "NICK") {
-                // Extract nickname
-
-                std::string nick;
-				iss >> nick;
-                // Handle nickname setting
-                // setClientNickname(fd, nick);
+            std::string realname;
+            std::getline(iss >> std::ws, realname);
+            if (!realname.empty() && realname[0] == ':') {
+                realname = realname.substr(1); // Remove leading ':'
             }
-            else if (command == "USER") {
-                // Extract USER information
-                std::vector<std::string> userParts;
-                std::string part;
-                for (int i = 0; i < 4 && iss >> part; ++i) {
-					userParts.push_back(part);
-				}
-				std::string realname;
-				std::getline(iss >> std::ws, realname);
-				if (!realname.empty() && realname[0] == ':') {
-					realname = realname.substr(1);  // Remove leading ':'
-				}
-				if (userParts.size() >= 4) {
-					std::vector<User>::iterator it;
-					for (it = users.begin(); it != users.end(); ++it) {
-						if (it->getFd() == fd) {
-							break;
-						}
-					}
-					if (it != users.end()) {
-						// Update existing user
-						it->setUser(userParts[1]);
-						it->setHostname(userParts[2]);
-						it->setRealName(realname);
-						PrintUserParts(*it);
-					} else {
-						// Create new user
-						User user;
-						user.setUser(userParts[1]);
-						user.setHostname(userParts[2]);
-						user.setRealName(realname);
-						user.setFd(fd);
-						user.setPass("password123");
-						users.push_back(user);
-						PrintUserParts(user);
-					}
-				}
+            if (userParts.size() >= 4) {
+                std::vector<User>::iterator it;
+                for (it = users.begin(); it != users.end(); ++it) {
+                    if (it->getFd() == fd) {
+                        break;
+                    }
+                }
+                if (it != users.end()) {
+                    // Update existing user
+                    it->setUser(userParts[1]);
+                    it->setHostname(userParts[2]);
+                    it->setRealName(realname);
+                    PrintUserParts(*it);
+                    sendWelcomeMessages(fd, it->getNick());
+                } else {
+                    // Create new user
+                    User user;
+                    user.setUser(userParts[1]);
+                    user.setHostname(userParts[2]);
+                    user.setRealName(realname);
+                    user.setFd(fd);
+                    users.push_back(user);
+                    PrintUserParts(user);
+                    sendWelcomeMessages(fd, user.getNick());
+                }
             }
         }
+        else if (command == "PASS") {
+            std::string pass;
+            iss >> pass;
+            Server::auth(fd, pass);
+        }
+        else if (command == "MODE") {
+            std::string channel, mode;
+            iss >> channel >> mode;
+            handleMode(fd, channel, mode);
+        }
+        else if (command == "WHOIS") {
+            std::string target;
+            iss >> target;
+            handleWhois(fd, target);
+        }
+        else if (command == "PING") {
+            std::string server;
+            iss >> server;
+            handlePing(fd, server);
+        }
+    }
+}
+
+void Server::setClientNickname(int fd, const std::string& nick) {
+    // Find user and set nickname
+    // Send nickname acknowledgement
+    std::string response = ":" + nick + " NICK :" + nick + "\r\n";
+	std::vector<User>::iterator it;
+	for (it = users.begin(); it != users.end(); ++it) {
+		if (it->getFd() == fd) {
+			break;
+		}
+	}
+	if (it != users.end()) {
+		it->setNick(nick);
+	}
+    send(fd, response.c_str(), response.length(), 0);
+}
+
+void Server::handleMode(int fd, const std::string& channel, const std::string& mode) {
+    // Implement channel mode handling
+    // For now, just acknowledge the mode change
+    std::string response = ":server 324 " + channel + " " + mode + "\r\n";
+    send(fd, response.c_str(), response.length(), 0);
+}
+
+void Server::handleWhois(int fd, const std::string& target) {
+    // Implement WHOIS command
+    // For now, send a placeholder response
+    std::string response = ":server 311 " + target + " " + target + " username hostname * :realname\r\n";
+    response += ":server 318 " + target + " :End of /WHOIS list.\r\n";
+    send(fd, response.c_str(), response.length(), 0);
+}
+
+void Server::handlePing(int fd, const std::string& server) {
+    std::string response = "PONG :" + server + "\r\n";
+    ssize_t sent = send(fd, response.c_str(), response.length(), 0);
+    if (sent == -1) {
+        // Handle send error
+        std::cerr << "Error sending PONG response" << std::endl;
+    } else if (static_cast<size_t>(sent) < response.length()) {
+        // Handle partial send
+        std::cerr << "Partial PONG response sent" << std::endl;
+    }
+}
+
+Client* Server::getClientByFd(int fd)
+{
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it)
+    {
+        if (it->getFd() == fd)
+        {
+            return &(*it);
+        }
+    }
+    return NULL;  // Return NULL if no client with the given fd is found
 }
 
 void Server::ReceiveNewData(int fd)
 {
-	char buff[1024]; //-> create a buffer to store the received data
-	ssize_t bytes = recv(fd, buff, sizeof(buff) - 1 , 0); //-> receive the data
-	if(bytes <= 0)//-> check if the client disconnected
-	{ 
-		std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
-		ClearClients(fd); //-> clear the client
-		close(fd); //-> close the client socket
-	}
-	else //-> print the received data
-	{
-		buff[bytes] = '\0';
-		std::cout << YEL << "Client <" << fd << "> Data: " << WHI << buff;
-		ProcessClientInput(buff, fd);
-		//here you can add your code to process the received data: parse, check, authenticate, handle the command, etc...
-	}
+    char temp_buff[1024];
+    ssize_t bytes = recv(fd, temp_buff, sizeof(temp_buff) - 1, 0);
+    if (bytes <= 0)
+    {
+        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
+        ClearClients(fd);
+        close(fd);
+    }
+    else
+    {
+        temp_buff[bytes] = '\0';
+        Client* client = getClientByFd(fd);
+        if (client)
+        {
+            client->buffer += temp_buff;
+            
+            size_t pos;
+            while ((pos = client->buffer.find("\r\n")) != std::string::npos)
+            {
+                std::string command = client->buffer.substr(0, pos);
+                ProcessClientInput(command.c_str(), fd);
+                client->buffer.erase(0, pos + 2);
+            }
+        }
+        else
+        {
+            std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        }
+    }
 }
 
 void Server::ServerInit(int port, std::string pass)

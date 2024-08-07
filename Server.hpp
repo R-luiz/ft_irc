@@ -50,6 +50,13 @@ class Server //-> class for server
 		void PrintUserParts(User user); //-> print user parts
 		void CloseFds(); //-> close file descriptors
 		void ClearClients(int fd); //-> clear clients
+		void auth(int fd, std::string pass); //-> authenticate the user
+		void sendWelcomeMessages(int fd, const std::string& nickname);
+		void handlePing(int fd, const std::string& server);
+		void handleWhois(int fd, const std::string& target);
+		void handleMode(int fd, const std::string& channel, const std::string& mode);
+		void setClientNickname(int fd, const std::string& nick);
+		Client* getClientByFd(int fd);
 };
 
 #endif
