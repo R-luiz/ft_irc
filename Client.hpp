@@ -35,6 +35,9 @@ class Client //-> class for client
 		std::string IPadd; //-> client ip address
 		bool authenticated; //-> flag for authentication
 		User *user; //-> user object
+		bool nickset; //-> flag for nickname set
+		bool userset; //-> flag for username set
+		
 	public:
 		std::string buffer; //-> buffer for client
 		Client(); //-> default constructor
@@ -52,6 +55,12 @@ class Client //-> class for client
 		User* getUser(); //-> getter for user
 		std::string getIPadd(); //-> getter for ipadd
 		void setIPadd(std::string ipadd); //-> setter for ipadd
+		void setUser(User* user); //-> setter for user
+		bool isNickSet(); //-> getter for nickset
+		void setNickSet(bool set); //-> setter for nickset
+		bool isUserSet(); //-> getter for userset
+		void setUserSet(bool set); //-> setter for userset
+
 };
 
 #endif

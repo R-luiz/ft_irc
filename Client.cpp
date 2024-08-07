@@ -1,6 +1,6 @@
 #include "Client.hpp"
 
-Client::Client() : Fd(-1), authenticated(false), user(new User()) {}
+Client::Client() : Fd(-1), authenticated(false), user(new User()), nickset(false), userset(false) {}
 
 Client::Client(const Client& other)
     : Fd(other.Fd), IPadd(other.IPadd), 
@@ -82,4 +82,33 @@ std::string Client::getIPadd()
 void Client::setIPadd(std::string ipadd)
 {
 	IPadd = ipadd;
+}
+
+void Client::setUser(User* user)
+{
+	if (this->user)
+		delete this->user;
+	this->user = user;
+	if (Fd != -1)
+		user->setFd(Fd);
+}
+
+bool Client::isNickSet()
+{
+	return user->getNick().length() > 0;
+}
+
+void Client::setNickSet(bool set)
+{
+	this->nickset = set;
+}
+
+bool Client::isUserSet()
+{
+	return this->userset;
+}
+
+void Client::setUserSet(bool set)
+{
+	this->userset = set;
 }

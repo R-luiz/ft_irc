@@ -57,7 +57,7 @@ class Server //-> class for server
 		void closeFds(); //-> close file descriptors
 		void clearClients(int fd); //-> clear clients
 		void auth(int fd, std::string pass); //-> authenticate the user
-		void sendWelcomeMessages(int fd, const std::string& nickname);
+		void sendWelcomeMessages(int fd);
 		void handlePing(int fd, const std::string& server);
 		void handleWhois(int fd, const std::string& target);
 		void handleMode(int fd, const std::string& channel, const std::string& mode);
@@ -72,6 +72,7 @@ class Server //-> class for server
 		void handleChannelMessage(int senderFd, const std::string& channelName, const std::string& message);
 		Channel *getChannel(const std::string& channelName); //-> get channel
 		void disconnectClient(int fd); //-> disconnect client
+		void checkRegistration(Client* client); //-> check registration
 };
 
 #endif

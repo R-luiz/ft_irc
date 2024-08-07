@@ -1,12 +1,14 @@
 #include "Channel.hpp"
 
-Channel::Channel(const std::string& channelName) : name(channelName) {}
+Channel::Channel(const std::string& channelName) : name(channelName), topic("") {}
 
 Channel::~Channel() {}
 
 void Channel::addUser(User* user) {
-    users.push_back(user);
-    operators[user] = false;
+	if (user && std::find(users.begin(), users.end(), user) == users.end()) {
+		users.push_back(user);
+		operators[user] = false;
+	}
 }
 
 void Channel::removeUser(User* user) {
@@ -23,7 +25,7 @@ void Channel::setTopic(const std::string& newTopic) {
 }
 
 std::string Channel::getTopic() const {
-    return topic;
+	return topic.empty() ? "No topic is set" : topic;
 }
 
 std::string Channel::getName() const {
