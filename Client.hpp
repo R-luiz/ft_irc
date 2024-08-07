@@ -36,6 +36,9 @@ class Client //-> class for client
 		void SetFd(int fd); //-> setter for fd
 		void setIpAdd(std::string ipadd); //-> setter for ipadd
 		std::string buffer; //-> buffer for client
+		void appendToBuffer(const std::string& data); //-> append data to buffer
+		void clearBuffer(); //-> clear buffer
+		std::string& getBuffer(); //-> getter for buffer
 };
 
 #endif

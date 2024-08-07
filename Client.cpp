@@ -16,3 +16,18 @@ int Client::getFd()
 {
 	return Fd;
 }
+
+void Client::appendToBuffer(const std::string& data)
+{
+	buffer += data;
+}
+
+void Client::clearBuffer()
+{
+	buffer.clear();
+}
+
+std::string& Client::getBuffer()
+{
+	return buffer;
+}
