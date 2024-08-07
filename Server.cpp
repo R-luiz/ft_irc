@@ -102,7 +102,7 @@ void Server::acceptNewClient()
 	NewPoll.revents = 0; //-> set the revents to 0
 
 	Client cli; //-> create a new client
-	cli.SetFd(incofd); //-> set the client file descriptor
+	cli.setFd(incofd); //-> set the client file descriptor
 	cli.setIpAdd(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
     cli.getUser()->setFd(incofd);
     clients.push_back(cli); //-> add the client to the vector of clients
