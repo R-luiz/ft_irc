@@ -7,7 +7,7 @@
 #                                     CONFIG                                   #
 ################################################################################
 
-NAME        := serverirc
+NAME        := ircserver
 CC         := c++
 FLAGS    := -Wall -Wextra -Werror -std=c++98
  
@@ -15,7 +15,9 @@ FLAGS    := -Wall -Wextra -Werror -std=c++98
 #                                 PROGRAM'S SRCS                               #
 ################################################################################
 
-SRCS        :=      Server.cpp \
+SRCS        :=      Client.cpp \
+                          Server.cpp \
+                          User.cpp \
                           
 OBJS        := ${SRCS:.cpp=.o}
 

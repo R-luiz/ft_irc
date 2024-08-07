@@ -31,23 +31,23 @@ class User //-> class for user
 	private:
 		std::string nickname;
 		std::string username;
-		std::string password;
 		std::string hostname;
+		std::string realname;
 		int fd;
 	public:
 		User(); //-> default constructor
-		User(std::string nick, std::string user, std::string pass); //-> constructor with parameters
+		User(std::string nick, std::string user); //-> constructor with parameters
 		~User(); //-> destructor
 		std::string getNick(); //-> getter for nickname
 		std::string getUser(); //-> getter for username
-		std::string getPass(); //-> getter for password
 		std::string getHostname(); //-> getter for hostname
+		std::string getRealName(); //-> getter for realname
 		int getFd(); //-> getter for fd
 		void setNick(std::string nick); //-> setter for nickname
 		void setUser(std::string user); //-> setter for username
-		void setPass(std::string pass); //-> setter for password
 		void setFd(int fd); //-> setter for fd
 		void setHostname(std::string host); //-> setter for hostname
+		void setRealName(std::string real); //-> setter for realname
 };
 
 #endif
