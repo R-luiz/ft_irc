@@ -1,22 +1,7 @@
 
 #include "Server.hpp"
 
-Client::Client() {}
 
-void Client::setIpAdd(std::string ipadd)
-{
-	IPadd = ipadd;
-}
-
-void Client::SetFd(int fd)
-{
-	Fd = fd;
-}
-
-int Client::getFd()
-{
-	return Fd;
-}
 
 Server::Server()
 {
@@ -67,15 +52,15 @@ void Server::SerSocket()
 
 	SerSocketFd = socket(AF_INET, SOCK_STREAM, 0); //-> create the server socket
 	if(SerSocketFd == -1) //-> check if the socket is created
-		throw(std::runtime_error("faild to create socket"));
+		throw(std::runtime_error("failed to create socket"));
 
 	int en = 1;
 	if(setsockopt(SerSocketFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1) //-> set the socket option (SO_REUSEADDR) to reuse the address
-		throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
+		throw(std::runtime_error("failed to set option (SO_REUSEADDR) on socket"));
 	if (fcntl(SerSocketFd, F_SETFL, O_NONBLOCK) == -1) //-> set the socket option (O_NONBLOCK) for non-blocking socket
-		throw(std::runtime_error("faild to set option (O_NONBLOCK) on socket"));
+		throw(std::runtime_error("failed to set option (O_NONBLOCK) on socket"));
 	if (bind(SerSocketFd, (struct sockaddr *)&add, sizeof(add)) == -1) //-> bind the socket to the address
-		throw(std::runtime_error("faild to bind socket"));
+		throw(std::runtime_error("failed to bind socket"));
 	if (listen(SerSocketFd, SOMAXCONN) == -1) //-> listen for incoming connections and making the socket a passive socket
 		throw(std::runtime_error("listen() failed"));
 
@@ -119,55 +104,6 @@ void Server::PrintUserParts(User user) {
 	std::cout << "--> End of user parts" << std::endl;
 }
 
-User::User() {}
-
-User::User(std::string nick, std::string user, std::string pass) {
-	nickname = nick;
-	username = user;
-	password = pass;
-}
-
-User::~User() {}
-
-std::string User::getNick() {
-	return nickname;
-}
-
-std::string User::getUser() {
-	return username;
-}
-
-std::string User::getPass() {
-	return password;
-}
-
-std::string User::getHostname() {
-	return hostname;
-}
-
-int User::getFd() {
-	return fd;
-}
-
-void User::setNick(std::string nick) {
-	nickname = nick;
-}
-
-void User::setUser(std::string user) {
-	username = user;
-}
-
-void User::setPass(std::string pass) {
-	password = pass;
-}
-
-void User::setHostname(std::string host) {
-	hostname = host;
-}
-
-void User::setFd(int fd) {
-	this->fd = fd;
-}
 
 void Server::ProcessClientInput(const char *buff, int fd) 
 {
@@ -211,12 +147,14 @@ void Server::ReceiveNewData(int fd)
 {
 	char buff[1024]; //-> create a buffer to store the received data
 	ssize_t bytes = recv(fd, buff, sizeof(buff) - 1 , 0); //-> receive the data
-	if(bytes <= 0){ //-> check if the client disconnected
+	if(bytes <= 0)//-> check if the client disconnected
+	{ 
 		std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
 		ClearClients(fd); //-> clear the client
 		close(fd); //-> close the client socket
 	}
-	else{ //-> print the received data
+	else //-> print the received data
+	{
 		buff[bytes] = '\0';
 		std::cout << YEL << "Client <" << fd << "> Data: " << WHI << buff;
 		ProcessClientInput(buff, fd);
@@ -235,7 +173,7 @@ void Server::ServerInit(int port, std::string pass)
 	while (Server::Signal == false) //-> run the server until the signal is received
 	{
 		if((poll(&fds[0],fds.size(),-1) == -1) && Server::Signal == false) //-> wait for an event
-			throw(std::runtime_error("poll() faild"));
+			throw(std::runtime_error("poll() failed"));
 
 		for (size_t i = 0; i < fds.size(); i++) //-> check all file descriptors
 		{
@@ -251,7 +189,8 @@ void Server::ServerInit(int port, std::string pass)
 	CloseFds(); //-> close the file descriptors when the server stops
 }
 
-bool isPortValid(std::string port){
+bool isPortValid(std::string port)
+{
 	return (port.find_first_not_of("0123456789") == std::string::npos && \
 	std::atoi(port.c_str()) >= 1024 && std::atoi(port.c_str()) <= 65535);
 }
