@@ -138,6 +138,38 @@ void Server::auth(int fd, std::string pass) {
     }
 }
 
+void Server::setClientUsername(int fd, const std::string& username, const std::string& hostname, const std::string& realname) {
+    Client* client = getClientByFd(fd);
+    if (!client) {
+        std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        return;
+    }
+
+    User* user = client->getUser();
+    if (!user) {
+        std::cerr << "Error: User object not found for client." << std::endl;
+        return;
+    }
+
+    if (!username.empty())
+        user->setUser(username);
+    if (!hostname.empty())
+        user->setHostname(hostname);
+    if (!realname.empty())
+        user->setRealName(realname);
+
+    if (!user->getNick().empty() && !user->getUser().empty()) {
+        if (!client->isAuthenticated()) {
+            client->setAuthenticated(true);
+            sendWelcomeMessages(fd, user->getNick());
+        }
+    }
+
+    std::string response = ":server 001 " + user->getNick() + " :Welcome to the IRC Network " + 
+                           user->getNick() + "!" + username + "@" + hostname + "\r\n";
+    send(fd, response.c_str(), response.length(), 0);
+}
+
 void Server::processClientInput(const char *buff, int fd)
 {
     std::string input(buff);
@@ -175,29 +207,18 @@ void Server::processClientInput(const char *buff, int fd)
             setClientNickname(fd, nick);
         }
         else if (command == "USER") {
-            // Extract USER information
-            std::vector<std::string> userParts;
-            std::string part;
-            for (int i = 0; i < 4 && iss >> part; ++i) {
-                userParts.push_back(part);
-            }
-            std::string realname;
-            std::getline(iss >> std::ws, realname);
-            if (!realname.empty() && realname[0] == ':') {
-                realname = realname.substr(1); // Remove leading ':'
-            }
-            if (userParts.size() >= 4) {
-                User* user = client->getUser();
-                if (user) {
-                    user->setUser(userParts[1]);
-                    user->setHostname(userParts[2]);
-                    user->setRealName(realname);
-                    printUserParts(*user);
-                    sendWelcomeMessages(fd, user->getNick());
-                } else {
-                    std::cerr << "Error: User object not found for client." << std::endl;
-                }
-            }
+        std::string username, hostname, servername, realname;
+        iss >> username >> hostname >> servername;
+        std::getline(iss >> std::ws, realname);
+        if (!realname.empty() && realname[0] == ':') {
+            realname = realname.substr(1);
+        }
+        setClientUsername(fd, username, hostname, realname);
+        }
+        else if (command == "userhost") {
+        std::string username;
+        iss >> username;
+        setClientUsername(fd, username, "", "");
         }
         else if (command == "MODE") {
             std::string channel, mode;

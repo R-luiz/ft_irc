@@ -62,6 +62,8 @@ class Server //-> class for server
 		Client* getClientByFd(int fd); //-> get client by file descriptor
 		bool isNickInUse(const std::string& nick); //-> check if the nickname is in use
 		void printServerState();
+		void setClientUsername(int fd, const std::string& username, const std::string& hostname, const std::string& realname);
+
 };
 
 #endif
