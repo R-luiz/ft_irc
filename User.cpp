@@ -1,6 +1,6 @@
 #include "User.hpp"
 
-User::User() {}
+User::User() : nickname(""), username(""), hostname(""), realname(""), fd(0) {}
 
 User::User(std::string nick, std::string user) {
 	nickname = nick;

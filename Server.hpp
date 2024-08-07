@@ -15,6 +15,8 @@
 #include <string> //-> for string
 #include <cstdlib> //-> for atoi() 
 #include <sstream> //-> for stringstream
+#include <iomanip>
+#include <fstream>
 #include "User.hpp"
 #include "Client.hpp"
 
@@ -37,15 +39,16 @@ class Server //-> class for server
 		static bool Signal; //-> static boolean for signal
 		std::vector<Client> clients; //-> vector of clients
 		std::vector<struct pollfd> fds; //-> vector of pollfd
-		std::vector<User> users; //-> vector of users
+
 	public:
 		Server(); //-> default constructor
+		~Server(); //-> destructor
 
 		void ServerInit(int port, std::string pass); //-> server initialization
 		void SerSocket(); //-> server socket creation
 		void AcceptNewClient(); //-> accept new client
 		void ReceiveNewData(int fd); //-> receive new data from a registered client
-		void ProcessClientInput(const char *buff, int id); //-> process the client input
+		void processClientInput(const char *buff, int id); //-> process the client input
 		static void SignalHandler(int signum); //-> signal handler
 		void PrintUserParts(User user); //-> print user parts
 		void CloseFds(); //-> close file descriptors
@@ -56,7 +59,9 @@ class Server //-> class for server
 		void handleWhois(int fd, const std::string& target);
 		void handleMode(int fd, const std::string& channel, const std::string& mode);
 		void setClientNickname(int fd, const std::string& nick);
-		Client* getClientByFd(int fd);
+		Client* getClientByFd(int fd); //-> get client by file descriptor
+		bool isNickInUse(const std::string& nick); //-> check if the nickname is in use
+		void printServerState();
 };
 
 #endif

@@ -8,24 +8,27 @@ Server::Server()
 	SerSocketFd = -1;
 }
 
-void Server::ClearClients(int fd){ //-> clear the clients
-	for(size_t i = 0; i < fds.size(); i++)//-> remove the client from the pollfd
-	{ 
-		if (fds[i].fd == fd)
-		{
-			fds.erase(fds.begin() + i); 
-			break;
-		}
-	}
-	for(size_t i = 0; i < clients.size(); i++)
-	{ //-> remove the client from the vector of clients
-		if (clients[i].getFd() == fd)
-		{
-			clients.erase(clients.begin() + i); 
-			break;
-		}
-	}
+Server::~Server()
+{
+    CloseFds();
+    clients.clear();
+    fds.clear();
+}
 
+void Server::ClearClients(int fd) {
+    for (std::vector<pollfd>::iterator it = fds.begin(); it != fds.end(); ++it) {
+        if (it->fd == fd) {
+            fds.erase(it);
+            break;
+        }
+    }
+    
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (it->getFd() == fd) {
+            clients.erase(it);
+            break;
+        }
+    }
 }
 
 void Server::CloseFds(){ //-> close the file descriptors
@@ -83,7 +86,6 @@ void Server::sendWelcomeMessages(int fd, const std::string& nickname) {
 
 void Server::AcceptNewClient()
 {
-	Client cli; //-> create a new client
 	struct sockaddr_in cliadd;
 	struct pollfd NewPoll;
 	socklen_t len = sizeof(cliadd);
@@ -99,11 +101,12 @@ void Server::AcceptNewClient()
 	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
 	NewPoll.revents = 0; //-> set the revents to 0
 
+	Client cli; //-> create a new client
 	cli.SetFd(incofd); //-> set the client file descriptor
 	cli.setIpAdd(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
-	clients.push_back(cli); //-> add the client to the vector of clients
+    cli.getUser()->setFd(incofd);
+    clients.push_back(cli); //-> add the client to the vector of clients
 	fds.push_back(NewPoll); //-> add the client socket to the pollfd
-
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 	sendWelcomeMessages(incofd, "test");
 }
@@ -117,22 +120,36 @@ void Server::PrintUserParts(User user) {
 	std::cout << "--> End of user parts" << std::endl;
 }
 
-void Server::auth(int fd, std::string pass){
-	std::vector<User>::iterator it;
-	for (it = users.begin(); it != users.end(); ++it) {
-		if (it->getFd() == fd) {
-			break;
-		}
-	}
-	(void)pass;
+void Server::auth(int fd, std::string pass) {
+    Client* client = getClientByFd(fd);
+    if (!client) {
+        std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        return;
+    }
+    
+    if (pass == this->Pass) {
+        client->setAuthenticated(true);
+        std::string response = "001 :Password accepted\r\n";
+        send(fd, response.c_str(), response.length(), 0);
+    } else {
+        std::string error = "464 :Password incorrect\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        close(fd);
+    }
 }
 
-void Server::ProcessClientInput(const char *buff, int fd)
+void Server::processClientInput(const char *buff, int fd)
 {
     std::string input(buff);
     std::istringstream iss(input);
     std::string command;
-	std::cout << "received: " << input << std::endl;
+	std::cout << "received: " << input << " - from client <" << fd << ">" << std::endl;
+    Client* client = getClientByFd(fd);
+
+    if (!client) {
+        std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        return;
+    }
     while (iss >> command) {
         if (command == "CAP") {
             std::string capCommand;
@@ -141,6 +158,16 @@ void Server::ProcessClientInput(const char *buff, int fd)
                 send(fd, "CAP * LS :\r\n", 12, 0);
             else if (capCommand == "END")
                 send(fd, "CAP * ACK :multi-prefix\r\n", 25, 0);
+        }
+        else if (command == "PASS") {
+            std::string pass;
+            iss >> pass;
+            Server::auth(fd, pass);
+        }
+        else if (!client->isAuthenticated()) {
+            std::string error = "451 :You have not registered\r\n";
+            send(fd, error.c_str(), error.length(), 0);
+            return;
         }
         else if (command == "NICK") {
             std::string nick;
@@ -160,36 +187,17 @@ void Server::ProcessClientInput(const char *buff, int fd)
                 realname = realname.substr(1); // Remove leading ':'
             }
             if (userParts.size() >= 4) {
-                std::vector<User>::iterator it;
-                for (it = users.begin(); it != users.end(); ++it) {
-                    if (it->getFd() == fd) {
-                        break;
-                    }
-                }
-                if (it != users.end()) {
-                    // Update existing user
-                    it->setUser(userParts[1]);
-                    it->setHostname(userParts[2]);
-                    it->setRealName(realname);
-                    PrintUserParts(*it);
-                    sendWelcomeMessages(fd, it->getNick());
+                User* user = client->getUser();
+                if (user) {
+                    user->setUser(userParts[1]);
+                    user->setHostname(userParts[2]);
+                    user->setRealName(realname);
+                    PrintUserParts(*user);
+                    sendWelcomeMessages(fd, user->getNick());
                 } else {
-                    // Create new user
-                    User user;
-                    user.setUser(userParts[1]);
-                    user.setHostname(userParts[2]);
-                    user.setRealName(realname);
-                    user.setFd(fd);
-                    users.push_back(user);
-                    PrintUserParts(user);
-                    sendWelcomeMessages(fd, user.getNick());
+                    std::cerr << "Error: User object not found for client." << std::endl;
                 }
             }
-        }
-        else if (command == "PASS") {
-            std::string pass;
-            iss >> pass;
-            Server::auth(fd, pass);
         }
         else if (command == "MODE") {
             std::string channel, mode;
@@ -209,32 +217,45 @@ void Server::ProcessClientInput(const char *buff, int fd)
     }
 }
 
+bool Server::isNickInUse(const std::string& nick) {
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (it->getUser() && it->getUser()->getNick() == nick) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Server::setClientNickname(int fd, const std::string& nick) {
-    // Find user and set nickname
-    // Send nickname acknowledgement
+    Client* client = getClientByFd(fd);
+    if (!client) {
+        std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        return;
+    }
+
+    if (isNickInUse(nick)) {
+        std::string error = "433 * " + nick + " :Nickname is already in use\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
     std::string response = ":" + nick + " NICK :" + nick + "\r\n";
-	std::vector<User>::iterator it;
-	for (it = users.begin(); it != users.end(); ++it) {
-		if (it->getFd() == fd) {
-			break;
-		}
-	}
-	if (it != users.end()) {
-		it->setNick(nick);
-	}
+    client->getUser()->setNick(nick);
     send(fd, response.c_str(), response.length(), 0);
+
+    if (client->isAuthenticated()) {
+        sendWelcomeMessages(fd, nick);
+    }
 }
 
 void Server::handleMode(int fd, const std::string& channel, const std::string& mode) {
     // Implement channel mode handling
-    // For now, just acknowledge the mode change
     std::string response = ":server 324 " + channel + " " + mode + "\r\n";
     send(fd, response.c_str(), response.length(), 0);
 }
 
 void Server::handleWhois(int fd, const std::string& target) {
     // Implement WHOIS command
-    // For now, send a placeholder response
     std::string response = ":server 311 " + target + " " + target + " username hostname * :realname\r\n";
     response += ":server 318 " + target + " :End of /WHOIS list.\r\n";
     send(fd, response.c_str(), response.length(), 0);
@@ -252,16 +273,13 @@ void Server::handlePing(int fd, const std::string& server) {
     }
 }
 
-Client* Server::getClientByFd(int fd)
-{
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it)
-    {
-        if (it->getFd() == fd)
-        {
+Client* Server::getClientByFd(int fd) {
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (it->getFd() == fd) {
             return &(*it);
         }
     }
-    return NULL;  // Return NULL if no client with the given fd is found
+    return NULL;
 }
 
 void Server::ReceiveNewData(int fd)
@@ -271,7 +289,6 @@ void Server::ReceiveNewData(int fd)
     if (bytes <= 0)
     {
         std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
-        ClearClients(fd);
         close(fd);
     }
     else
@@ -286,8 +303,12 @@ void Server::ReceiveNewData(int fd)
             while ((pos = client->buffer.find("\r\n")) != std::string::npos)
             {
                 std::string command = client->buffer.substr(0, pos);
-                ProcessClientInput(command.c_str(), fd);
+                processClientInput(command.c_str(), fd);
                 client->buffer.erase(0, pos + 2);
+                if (!getClientByFd(fd))
+                {
+                    return;
+                }
             }
         }
         else
@@ -295,6 +316,49 @@ void Server::ReceiveNewData(int fd)
             std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
         }
     }
+}
+void Server::printServerState() {
+    static int updateCount = 0;
+    updateCount++;
+
+    std::ofstream outFile("server_state.log", std::ios::app);
+    if (!outFile.is_open()) {
+        std::cerr << "Failed to open server_state.log for writing." << std::endl;
+        return;
+    }
+
+    outFile << "==== Server State (Update #" << updateCount << ") ====" << std::endl;
+    outFile << "Server Socket FD: " << SerSocketFd << std::endl;
+    outFile << "Port: " << Port << std::endl;
+    outFile << "Number of clients: " << clients.size() << std::endl;
+    outFile << std::endl;
+    outFile << "=== Clients ===" << std::endl;
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        Client& client = *it;
+        outFile << "Client FD: " << client.getFd() << std::endl;
+        outFile << "IP Address: " << client.getIPadd() << std::endl;
+        outFile << "Authenticated: " << (client.isAuthenticated() ? "Yes" : "No") << std::endl;
+        
+        User* user = client.getUser();
+        if (user) {
+            outFile << "  Nickname: " << user->getNick() << std::endl;
+            outFile << "  Username: " << user->getUser() << std::endl;
+            outFile << "  Hostname: " << user->getHostname() << std::endl;
+            outFile << "  Realname: " << user->getRealName() << std::endl;
+        } else {
+            outFile << "  User data not available" << std::endl;
+        }
+        outFile << "  Buffer: " << (client.getBuffer().empty() ? "Empty" : client.getBuffer()) << std::endl;
+        outFile << std::endl;
+    }
+    outFile << "=== Active File Descriptors ===" << std::endl;
+    for (std::vector<struct pollfd>::const_iterator it = fds.begin(); it != fds.end(); ++it) {
+        outFile << "FD: " << it->fd << ", Events: " << it->events << ", Revents: " << it->revents << std::endl;
+    }
+    outFile << std::endl;
+    outFile << "Server is running. Check console for stop instructions." << std::endl;
+
+    outFile.close();
 }
 
 void Server::ServerInit(int port, std::string pass)
@@ -312,6 +376,7 @@ void Server::ServerInit(int port, std::string pass)
 
 		for (size_t i = 0; i < fds.size(); i++) //-> check all file descriptors
 		{
+            printServerState();
 			if (fds[i].revents & POLLIN)//-> check if there is data to read
 			{
 				if (fds[i].fd == SerSocketFd)
@@ -321,7 +386,6 @@ void Server::ServerInit(int port, std::string pass)
 			}
 		}
 	}
-	CloseFds(); //-> close the file descriptors when the server stops
 }
 
 bool isPortValid(std::string port)
