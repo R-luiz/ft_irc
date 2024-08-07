@@ -34,6 +34,7 @@ class User //-> class for user
 		std::string hostname;
 		std::string realname;
 		int fd;
+
 	public:
 		User(); //-> default constructor
 		User(std::string nick, std::string user); //-> constructor with parameters

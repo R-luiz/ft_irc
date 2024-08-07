@@ -1,8 +1,6 @@
 
 #include "Server.hpp"
 
-
-
 Server::Server()
 {
 	serSocketFd = -1;
@@ -86,29 +84,36 @@ void Server::sendWelcomeMessages(int fd, const std::string& nickname) {
 
 void Server::acceptNewClient()
 {
-	struct sockaddr_in cliadd;
-	struct pollfd NewPoll;
-	socklen_t len = sizeof(cliadd);
+    struct sockaddr_in cliadd;
+    socklen_t len = sizeof(cliadd);
 
-	int incofd = accept(serSocketFd, (sockaddr *)&(cliadd), &len); //-> accept the new client
-	if (incofd == -1)
-		{std::cout << "accept() failed" << std::endl; return;}
+    int incofd = accept(serSocketFd, (sockaddr *)&(cliadd), &len);
+    if (incofd == -1)
+    {
+        std::cerr << "accept() failed" << std::endl;
+        return;
+    }
 
-	if (fcntl(incofd, F_SETFL, O_NONBLOCK) == -1) //-> set the socket option (O_NONBLOCK) for non-blocking socket
-		{std::cout << "fcntl() failed" << std::endl; return;}
+    if (fcntl(incofd, F_SETFL, O_NONBLOCK) == -1)
+    {
+        std::cerr << "fcntl() failed" << std::endl;
+        close(incofd);
+        return;
+    }
 
-	NewPoll.fd = incofd; //-> add the client socket to the pollfd
-	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
-	NewPoll.revents = 0; //-> set the revents to 0
+    struct pollfd NewPoll;
+    NewPoll.fd = incofd;
+    NewPoll.events = POLLIN;
+    NewPoll.revents = 0;
 
-	Client cli; //-> create a new client
-	cli.setFd(incofd); //-> set the client file descriptor
-	cli.setIpAdd(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
+    Client cli;
+    cli.setFd(incofd);
+    cli.setIpAdd(inet_ntoa(cliadd.sin_addr));
     cli.getUser()->setFd(incofd);
-    clients.push_back(cli); //-> add the client to the vector of clients
-	fds.push_back(NewPoll); //-> add the client socket to the pollfd
-	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
-	sendWelcomeMessages(incofd, "test");
+    clients.push_back(cli);
+    fds.push_back(NewPoll);
+
+    std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
 
 void Server::printUserParts(User user) {
@@ -235,6 +240,15 @@ void Server::processClientInput(const char *buff, int fd)
             iss >> server;
             handlePing(fd, server);
         }
+        else if (command == "JOIN") {
+        std::string channelName;
+        iss >> channelName;
+        handleJoin(fd, channelName);
+        }
+        else {
+            std::string error = "421 * " + command + " :Unknown command\r\n";
+            send(fd, error.c_str(), error.length(), 0);
+        }
     }
 }
 
@@ -257,6 +271,7 @@ void Server::setClientNickname(int fd, const std::string& nick) {
     if (isNickInUse(nick)) {
         std::string error = "433 * " + nick + " :Nickname is already in use\r\n";
         send(fd, error.c_str(), error.length(), 0);
+        client->getUser()->setNick("");
         return;
     }
 
@@ -303,14 +318,44 @@ Client* Server::getClientByFd(int fd) {
     return NULL;
 }
 
+void Server::disconnectClient(int fd)
+{
+    std::vector<struct pollfd>::iterator it;
+    for (it = fds.begin(); it != fds.end(); ++it) {
+        if (it->fd == fd) {
+            fds.erase(it);
+            break;
+        }
+    }
+
+    std::vector<Client>::iterator client_it;
+    for (client_it = clients.begin(); client_it != clients.end(); ++client_it) {
+        if (client_it->getFd() == fd) {
+            // Remove the client from all channels
+            std::map<std::string, Channel*>::iterator channel_it;
+            for (channel_it = channels.begin(); channel_it != channels.end(); ++channel_it) {
+                channel_it->second->removeUser(client_it->getUser());
+            }
+            clients.erase(client_it);
+            break;
+        }
+    }
+
+    close(fd);
+}
+
 void Server::receiveNewData(int fd)
 {
     char temp_buff[1024];
     ssize_t bytes = recv(fd, temp_buff, sizeof(temp_buff) - 1, 0);
     if (bytes <= 0)
     {
-        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
-        close(fd);
+        if (bytes == 0) {
+            std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
+        } else {
+            std::cerr << "Error receiving data from client <" << fd << ">" << std::endl;
+        }
+        disconnectClient(fd);
     }
     else
     {
@@ -318,7 +363,7 @@ void Server::receiveNewData(int fd)
         Client* client = getClientByFd(fd);
         if (client)
         {
-            client->buffer += temp_buff;
+            client->appendToBuffer(temp_buff);
             
             size_t pos;
             while ((pos = client->buffer.find("\r\n")) != std::string::npos)
@@ -326,10 +371,7 @@ void Server::receiveNewData(int fd)
                 std::string command = client->buffer.substr(0, pos);
                 processClientInput(command.c_str(), fd);
                 client->buffer.erase(0, pos + 2);
-                if (!getClientByFd(fd))
-                {
-                    return;
-                }
+                client->appendToBuffer(client->getBuffer().substr(pos + 2));
             }
         }
         else
@@ -384,29 +426,172 @@ void Server::printServerState() {
 
 void Server::serverInit(int port, std::string pass)
 {
-	this->Port = port; //-> set the server port
-	this->Pass = pass; //-> set the server password
-	this->serSocket(); //-> create the server socket
+    this->Port = port;
+    this->Pass = pass;
+    this->serSocket();
 
-	std::cout << GRE << "Server <" << serSocketFd << "> Connected" << WHI << std::endl;
-	std::cout << "Waiting to accept a connection...\n";
-	while (Server::Signal == false) //-> run the server until the signal is received
-	{
-		if((poll(&fds[0],fds.size(),-1) == -1) && Server::Signal == false) //-> wait for an event
-			throw(std::runtime_error("poll() failed"));
+    std::cout << GRE << "Server <" << serSocketFd << "> Connected" << WHI << std::endl;
+    std::cout << "Waiting to accept a connection...\n";
+    while (Server::Signal == false)
+    {
+        int poll_result = poll(&fds[0], fds.size(), -1);
+        if (poll_result == -1 && Server::Signal == false)
+        {
+            throw(std::runtime_error("poll() failed"));
+        }
+        else if (poll_result > 0)
+        {
+            for (size_t i = 0; i < fds.size(); ++i)
+            {
+                if (fds[i].revents & POLLIN)
+                {
+                    if (fds[i].fd == serSocketFd)
+                    {
+                        acceptNewClient();
+                    }
+                    else
+                    {
+                        receiveNewData(fds[i].fd);
+                    }
+                }
+                else if (fds[i].revents & (POLLHUP | POLLERR))
+                {
+                    std::cout << RED << "Client <" << fds[i].fd << "> Disconnected" << WHI << std::endl;
+                    disconnectClient(fds[i].fd);
+                    --i; // Decrement i because we removed an element from fds
+                }
+            }
+        }
+    }
+}
 
-		for (size_t i = 0; i < fds.size(); i++) //-> check all file descriptors
-		{
-            printServerState();
-			if (fds[i].revents & POLLIN)//-> check if there is data to read
-			{
-				if (fds[i].fd == serSocketFd)
-					acceptNewClient(); //-> accept new client
-				else
-					receiveNewData(fds[i].fd); //-> receive new data from a registered client
-			}
-		}
-	}
+Channel *Server::getChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = channels.find(channelName);
+    if (it == channels.end()) {
+        std::cerr << "Error: Channel " << channelName << " not found." << std::endl;
+        return NULL;
+    }
+    return it->second;
+}
+
+void Server::handleChannelMessage(int senderFd, const std::string& channelName, const std::string& message) {
+    Client* client = getClientByFd(senderFd);
+    if (!client || !client->getUser()) return;
+
+    Channel* channel = getChannel(channelName);
+    if (!channel) return;
+
+    User* sender = client->getUser();
+    std::string formattedMessage = ":" + sender->getNick() + "!" + sender->getUser() + "@" + sender->getHostname() + " PRIVMSG " + channelName + " :" + message + "\r\n";
+
+    channel->broadcastMessage(formattedMessage, sender);
+}
+
+void Server::handleJoin(int fd, const std::string& channelName) {
+    Client* client = getClientByFd(fd);
+    if (!client) {
+        std::cerr << "Error: Client with fd " << fd << " not found." << std::endl;
+        return;
+    }
+
+    User* user = client->getUser();
+    if (!user) {
+        std::cerr << "Error: User object not found for client." << std::endl;
+        return;
+    }
+
+    Channel* channel = getOrCreateChannel(channelName);
+    if (!channel) {
+        std::cerr << "Error: Failed to create or get channel " << channelName << std::endl;
+        return;
+    }
+
+    if (channel->hasUser(user)) {
+        std::string error = ":server 443 ";
+        error += user->getNick();
+        error += " ";
+        error += channelName;
+        error += " :is already on channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    try {
+        channel->addUser(user);
+
+        std::string joinMessage = ":";
+        joinMessage += user->getNick();
+        joinMessage += "!";
+        joinMessage += user->getUser();
+        joinMessage += "@";
+        joinMessage += user->getHostname();
+        joinMessage += " JOIN ";
+        joinMessage += channelName;
+        joinMessage += "\r\n";
+        send(fd, joinMessage.c_str(), joinMessage.length(), 0);
+
+        std::string topicMessage = ":server 332 ";
+        topicMessage += user->getNick();
+        topicMessage += " ";
+        topicMessage += channelName;
+        topicMessage += " :";
+        topicMessage += channel->getTopic();
+        topicMessage += "\r\n";
+        send(fd, topicMessage.c_str(), topicMessage.length(), 0);
+
+        sendChannelUserList(fd, channel);
+
+        channel->broadcastMessage(joinMessage, user);
+    } catch (const std::exception& e) {
+        std::cerr << "Error in handleJoin: " << e.what() << std::endl;
+        std::string error = ":server 471 ";
+        error += user->getNick();
+        error += " ";
+        error += channelName;
+        error += " :Cannot join channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+    }
+}
+
+Channel* Server::getOrCreateChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = channels.find(channelName);
+    if (it == channels.end()) {
+        Channel* newChannel = new Channel(channelName);
+        channels[channelName] = newChannel;
+        return newChannel;
+    }
+    return it->second;
+}
+
+void Server::sendChannelUserList(int fd, Channel* channel) {
+    Client* client = getClientByFd(fd);
+    if (!client || !client->getUser()) return;
+
+    std::string userList = ":server 353 ";
+    userList += client->getUser()->getNick();
+    userList += " = ";
+    userList += channel->getName();
+    userList += " :";
+
+    std::vector<User*> users = channel->getUsers();
+    for (std::vector<User*>::iterator it = users.begin(); it != users.end(); ++it) {
+        if (channel->isOperator(*it)) {
+            userList += "@";
+        }
+        userList += (*it)->getNick();
+        userList += " ";
+    }
+    userList += "\r\n";
+
+    send(fd, userList.c_str(), userList.length(), 0);
+
+    std::string endOfList = ":server 366 ";
+    endOfList += client->getUser()->getNick();
+    endOfList += " ";
+    endOfList += channel->getName();
+    endOfList += " :End of /NAMES list.\r\n";
+
+    send(fd, endOfList.c_str(), endOfList.length(), 0);
 }
 
 bool isPortValid(std::string port)

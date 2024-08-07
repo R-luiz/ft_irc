@@ -4,7 +4,11 @@ Client::Client() : Fd(-1), authenticated(false), user(new User()) {}
 
 Client::Client(const Client& other)
     : Fd(other.Fd), IPadd(other.IPadd), 
-      authenticated(other.authenticated),user(new User(*other.user)), buffer(other.buffer) {}
+      authenticated(other.authenticated),
+	  user(new User(*other.user)), 
+	  buffer(other.buffer) {
+		user->setFd(Fd);
+}
 
 Client::~Client()
 {
@@ -31,6 +35,8 @@ void Client::setIpAdd(std::string ipadd)
 void Client::setFd(int fd)
 {
 	Fd = fd;
+	if (user)
+		user->setFd(fd);
 }
 
 int Client::getFd()
