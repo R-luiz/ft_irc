@@ -5,17 +5,17 @@
 
 Server::Server()
 {
-	SerSocketFd = -1;
+	serSocketFd = -1;
 }
 
 Server::~Server()
 {
-    CloseFds();
+    closeFds();
     clients.clear();
     fds.clear();
 }
 
-void Server::ClearClients(int fd) {
+void Server::clearClients(int fd) {
     for (std::vector<pollfd>::iterator it = fds.begin(); it != fds.end(); ++it) {
         if (it->fd == fd) {
             fds.erase(it);
@@ -31,21 +31,21 @@ void Server::ClearClients(int fd) {
     }
 }
 
-void Server::CloseFds(){ //-> close the file descriptors
+void Server::closeFds(){ //-> close the file descriptors
 	for(size_t i = 0; i < clients.size(); i++)//-> close the file descriptors of the clients
 		close(clients[i].getFd());
-	if (SerSocketFd != -1) //-> close the server socket file descriptor
-		close(SerSocketFd);
+	if (serSocketFd != -1) //-> close the server socket file descriptor
+		close(serSocketFd);
 }
 
 bool Server::Signal = false; //-> initialize the static boolean
-void Server::SignalHandler(int signum) //-> signal handler
+void Server::signalHandler(int signum) //-> signal handler
 { 
 	std::cout << RED << "Signal " << signum << " received" << WHI << std::endl;
 	Signal = true;
 }
 
-void Server::SerSocket()
+void Server::serSocket()
 {
 	struct sockaddr_in add;
 	struct pollfd NewPoll;
@@ -53,21 +53,21 @@ void Server::SerSocket()
 	add.sin_port = htons(this->Port); //-> convert the port to network byte order (big endian)
 	add.sin_addr.s_addr = INADDR_ANY; //-> set the address to any local machine address
 
-	SerSocketFd = socket(AF_INET, SOCK_STREAM, 0); //-> create the server socket
-	if(SerSocketFd == -1) //-> check if the socket is created
+	serSocketFd = socket(AF_INET, SOCK_STREAM, 0); //-> create the server socket
+	if(serSocketFd == -1) //-> check if the socket is created
 		throw(std::runtime_error("failed to create socket"));
 
 	int en = 1;
-	if(setsockopt(SerSocketFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1) //-> set the socket option (SO_REUSEADDR) to reuse the address
+	if(setsockopt(serSocketFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1) //-> set the socket option (SO_REUSEADDR) to reuse the address
 		throw(std::runtime_error("failed to set option (SO_REUSEADDR) on socket"));
-	if (fcntl(SerSocketFd, F_SETFL, O_NONBLOCK) == -1) //-> set the socket option (O_NONBLOCK) for non-blocking socket
+	if (fcntl(serSocketFd, F_SETFL, O_NONBLOCK) == -1) //-> set the socket option (O_NONBLOCK) for non-blocking socket
 		throw(std::runtime_error("failed to set option (O_NONBLOCK) on socket"));
-	if (bind(SerSocketFd, (struct sockaddr *)&add, sizeof(add)) == -1) //-> bind the socket to the address
+	if (bind(serSocketFd, (struct sockaddr *)&add, sizeof(add)) == -1) //-> bind the socket to the address
 		throw(std::runtime_error("failed to bind socket"));
-	if (listen(SerSocketFd, SOMAXCONN) == -1) //-> listen for incoming connections and making the socket a passive socket
+	if (listen(serSocketFd, SOMAXCONN) == -1) //-> listen for incoming connections and making the socket a passive socket
 		throw(std::runtime_error("listen() failed"));
 
-	NewPoll.fd = SerSocketFd; //-> add the server socket to the pollfd
+	NewPoll.fd = serSocketFd; //-> add the server socket to the pollfd
 	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
 	NewPoll.revents = 0; //-> set the revents to 0
 	fds.push_back(NewPoll); //-> add the server socket to the pollfd
@@ -84,13 +84,13 @@ void Server::sendWelcomeMessages(int fd, const std::string& nickname) {
     send(fd, myInfo.c_str(), myInfo.length(), 0);
 }
 
-void Server::AcceptNewClient()
+void Server::acceptNewClient()
 {
 	struct sockaddr_in cliadd;
 	struct pollfd NewPoll;
 	socklen_t len = sizeof(cliadd);
 
-	int incofd = accept(SerSocketFd, (sockaddr *)&(cliadd), &len); //-> accept the new client
+	int incofd = accept(serSocketFd, (sockaddr *)&(cliadd), &len); //-> accept the new client
 	if (incofd == -1)
 		{std::cout << "accept() failed" << std::endl; return;}
 
@@ -111,7 +111,7 @@ void Server::AcceptNewClient()
 	sendWelcomeMessages(incofd, "test");
 }
 
-void Server::PrintUserParts(User user) {
+void Server::printUserParts(User user) {
 	std::cout << "--> User parts:" << std::endl;
 	std::cout << "--> Nick: " << user.getNick() << std::endl;
 	std::cout << "--> Username: " << user.getUser() << std::endl;
@@ -192,7 +192,7 @@ void Server::processClientInput(const char *buff, int fd)
                     user->setUser(userParts[1]);
                     user->setHostname(userParts[2]);
                     user->setRealName(realname);
-                    PrintUserParts(*user);
+                    printUserParts(*user);
                     sendWelcomeMessages(fd, user->getNick());
                 } else {
                     std::cerr << "Error: User object not found for client." << std::endl;
@@ -282,7 +282,7 @@ Client* Server::getClientByFd(int fd) {
     return NULL;
 }
 
-void Server::ReceiveNewData(int fd)
+void Server::receiveNewData(int fd)
 {
     char temp_buff[1024];
     ssize_t bytes = recv(fd, temp_buff, sizeof(temp_buff) - 1, 0);
@@ -328,7 +328,7 @@ void Server::printServerState() {
     }
 
     outFile << "==== Server State (Update #" << updateCount << ") ====" << std::endl;
-    outFile << "Server Socket FD: " << SerSocketFd << std::endl;
+    outFile << "Server Socket FD: " << serSocketFd << std::endl;
     outFile << "Port: " << Port << std::endl;
     outFile << "Number of clients: " << clients.size() << std::endl;
     outFile << std::endl;
@@ -361,13 +361,13 @@ void Server::printServerState() {
     outFile.close();
 }
 
-void Server::ServerInit(int port, std::string pass)
+void Server::serverInit(int port, std::string pass)
 {
 	this->Port = port; //-> set the server port
 	this->Pass = pass; //-> set the server password
-	this->SerSocket(); //-> create the server socket
+	this->serSocket(); //-> create the server socket
 
-	std::cout << GRE << "Server <" << SerSocketFd << "> Connected" << WHI << std::endl;
+	std::cout << GRE << "Server <" << serSocketFd << "> Connected" << WHI << std::endl;
 	std::cout << "Waiting to accept a connection...\n";
 	while (Server::Signal == false) //-> run the server until the signal is received
 	{
@@ -379,10 +379,10 @@ void Server::ServerInit(int port, std::string pass)
             printServerState();
 			if (fds[i].revents & POLLIN)//-> check if there is data to read
 			{
-				if (fds[i].fd == SerSocketFd)
-					AcceptNewClient(); //-> accept new client
+				if (fds[i].fd == serSocketFd)
+					acceptNewClient(); //-> accept new client
 				else
-					ReceiveNewData(fds[i].fd); //-> receive new data from a registered client
+					receiveNewData(fds[i].fd); //-> receive new data from a registered client
 			}
 		}
 	}
@@ -406,12 +406,12 @@ int main(int argc, char *argv[])
 	int port = std::atoi(argv[1]); //-> convert the port to integer
 	std::string pass = argv[2]; //-> get the password
 	try{
-		signal(SIGINT, Server::SignalHandler); //-> catch the signal (ctrl + c)
-		signal(SIGQUIT, Server::SignalHandler); //-> catch the signal (ctrl + \)
-		ser.ServerInit(port, pass); //-> initialize the server
+		signal(SIGINT, Server::signalHandler); //-> catch the signal (ctrl + c)
+		signal(SIGQUIT, Server::signalHandler); //-> catch the signal (ctrl + \)
+		ser.serverInit(port, pass); //-> initialize the server
 	}
 	catch(const std::exception& e){
-		ser.CloseFds(); //-> close the file descriptors
+		ser.closeFds(); //-> close the file descriptors
 		std::cerr << e.what() << std::endl;
 	}
 	std::cout << "The Server Closed!" << std::endl;

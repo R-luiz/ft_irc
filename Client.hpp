@@ -42,7 +42,7 @@ class Client //-> class for client
 		Client& operator=(const Client& other); //-> assignment operator
 		~Client(); //-> destructor
 		int getFd(); //-> getter for fd
-		void SetFd(int fd); //-> setter for fd
+		void setFd(int fd); //-> setter for fd
 		void setIpAdd(std::string ipadd); //-> setter for ipadd
 		void appendToBuffer(const std::string& data); //-> append data to buffer
 		void clearBuffer(); //-> clear buffer

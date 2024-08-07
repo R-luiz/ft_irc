@@ -35,7 +35,7 @@ class Server //-> class for server
 	private:
 		int Port; //-> server port
 		std::string Pass; //-> server password
-		int SerSocketFd; //-> server socket file descriptor
+		int serSocketFd; //-> server socket file descriptor
 		static bool Signal; //-> static boolean for signal
 		std::vector<Client> clients; //-> vector of clients
 		std::vector<struct pollfd> fds; //-> vector of pollfd
@@ -44,15 +44,15 @@ class Server //-> class for server
 		Server(); //-> default constructor
 		~Server(); //-> destructor
 
-		void ServerInit(int port, std::string pass); //-> server initialization
-		void SerSocket(); //-> server socket creation
-		void AcceptNewClient(); //-> accept new client
-		void ReceiveNewData(int fd); //-> receive new data from a registered client
+		void serverInit(int port, std::string pass); //-> server initialization
+		void serSocket(); //-> server socket creation
+		void acceptNewClient(); //-> accept new client
+		void receiveNewData(int fd); //-> receive new data from a registered client
 		void processClientInput(const char *buff, int id); //-> process the client input
-		static void SignalHandler(int signum); //-> signal handler
-		void PrintUserParts(User user); //-> print user parts
-		void CloseFds(); //-> close file descriptors
-		void ClearClients(int fd); //-> clear clients
+		static void signalHandler(int signum); //-> signal handler
+		void printUserParts(User user); //-> print user parts
+		void closeFds(); //-> close file descriptors
+		void clearClients(int fd); //-> clear clients
 		void auth(int fd, std::string pass); //-> authenticate the user
 		void sendWelcomeMessages(int fd, const std::string& nickname);
 		void handlePing(int fd, const std::string& server);

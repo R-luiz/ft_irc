@@ -28,7 +28,7 @@ void Client::setIpAdd(std::string ipadd)
 	IPadd = ipadd;
 }
 
-void Client::SetFd(int fd)
+void Client::setFd(int fd)
 {
 	Fd = fd;
 }
