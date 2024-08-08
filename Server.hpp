@@ -19,6 +19,7 @@
 #include <fstream>
 #include "User.hpp"
 #include "Client.hpp"
+#include "Channel.hpp"
 
 //-------------------------------------------------------//
 #define RED "\e[1;31m" //-> for red color
@@ -29,6 +30,7 @@
 //-------------------------------------------------------//
 class Client; //-> forward declaration
 class User; //-> forward declaration
+class Channel; //-> forward declaration
 
 class Server //-> class for server
 {
@@ -39,6 +41,7 @@ class Server //-> class for server
 		static bool Signal; //-> static boolean for signal
 		std::vector<Client> clients; //-> vector of clients
 		std::vector<struct pollfd> fds; //-> vector of pollfd
+		std::map<std::string, Channel*> channels; //-> map of channels
 
 	public:
 		Server(); //-> default constructor
@@ -54,14 +57,23 @@ class Server //-> class for server
 		void closeFds(); //-> close file descriptors
 		void clearClients(int fd); //-> clear clients
 		void auth(int fd, std::string pass); //-> authenticate the user
-		void sendWelcomeMessages(int fd, const std::string& nickname);
+		void sendWelcomeMessages(int fd);
 		void handlePing(int fd, const std::string& server);
 		void handleWhois(int fd, const std::string& target);
 		void handleMode(int fd, const std::string& channel, const std::string& mode);
 		void setClientNickname(int fd, const std::string& nick);
 		Client* getClientByFd(int fd); //-> get client by file descriptor
 		bool isNickInUse(const std::string& nick); //-> check if the nickname is in use
-		void printServerState();
+		void printServerState(); //-> print server state in log file
+		void setClientUsername(int fd, const std::string& username, const std::string& hostname, const std::string& realname);
+		void handleJoin(int fd, const std::string& channelName); //-> handle join command
+		Channel* getOrCreateChannel(const std::string& channelName); //-> get or create channel
+		void sendChannelUserList(int fd, Channel* channel); //-> send channel user list
+		void handleChannelMessage(int senderFd, const std::string& channelName, const std::string& message);
+		Channel *getChannel(const std::string& channelName); //-> get channel
+		void disconnectClient(int fd); //-> disconnect client
+		void checkRegistration(Client* client); //-> check registration
+		void handlePrivmsg(int senderFd, const std::string& target, const std::string& message);
 };
 
 #endif
