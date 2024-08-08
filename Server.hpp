@@ -75,6 +75,9 @@ class Server //-> class for server
 		void checkRegistration(Client* client); //-> check registration
 		void handlePrivmsg(int senderFd, const std::string& target, const std::string& message);
 		bool isValidNickname(const std::string& nick); //-> check if the nickname is valid
+		void handleKick(int fd, const std::string& channelName, const std::string& targetNick, const std::string& reason);
+		Client* getClientByNick(const std::string& nick); //-> get client by nickname
+		void handlePart(int fd, const std::string& channelName, const std::string& reason); //-> handle part command
 };
 
 #endif
