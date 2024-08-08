@@ -61,7 +61,7 @@ class Server //-> class for server
 		void handlePing(int fd, const std::string& server);
 		void handleWhois(int fd, const std::string& target);
 		void handleMode(int fd, const std::string& channel, const std::string& mode);
-		void setClientNickname(int fd, const std::string& nick);
+		void setClientNickname(int fd, std::string& nick);
 		Client* getClientByFd(int fd); //-> get client by file descriptor
 		bool isNickInUse(const std::string& nick); //-> check if the nickname is in use
 		void printServerState(); //-> print server state in log file
@@ -75,6 +75,10 @@ class Server //-> class for server
 		void checkRegistration(Client* client); //-> check registration
 		void handlePrivmsg(int senderFd, const std::string& target, const std::string& message);
 		bool isValidNickname(const std::string& nick); //-> check if the nickname is valid
+		Client* getClientByNick(const std::string& nick); //-> get client by nickname
+		void handlePart(int fd, const std::string& channelName, const std::string& reason); //-> handle part command
+		void handleKick(int fd, const std::string& channelName, const std::string& targetNick, const std::string& reason);
+
 };
 
 #endif

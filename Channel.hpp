@@ -6,6 +6,7 @@
 #include <map>
 #include "User.hpp"
 #include <algorithm>
+#include <iostream>
 
 class User;
 
@@ -20,7 +21,7 @@ public:
     Channel(const std::string& channelName);
     ~Channel();
 
-    void addUser(User* user);
+    void addUser(User* user, bool isOperator);
     void removeUser(User* user);
     bool hasUser(User* user) const;
     void setTopic(const std::string& newTopic);
