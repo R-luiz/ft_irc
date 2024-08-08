@@ -74,6 +74,7 @@ class Server //-> class for server
 		void disconnectClient(int fd); //-> disconnect client
 		void checkRegistration(Client* client); //-> check registration
 		void handlePrivmsg(int senderFd, const std::string& target, const std::string& message);
+		bool isValidNickname(const std::string& nick); //-> check if the nickname is valid
 };
 
 #endif
