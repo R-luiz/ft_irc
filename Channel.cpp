@@ -72,7 +72,7 @@ void Channel::broadcastMessage(const std::string& message, User* sender)
                     std::cerr << "Incomplete message sent to user " << (*it)->getNick() << std::endl;
             }
             else
-                std::cerr << "Invalid fd for user " << (*it)->getNick() << std::endl
+                std::cerr << "Invalid fd for user " << (*it)->getNick() << std::endl;
         }
     }
 }
