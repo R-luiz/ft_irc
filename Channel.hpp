@@ -10,17 +10,18 @@
 
 class User;
 
-class Channel {
-private:
-    std::string name;
-    std::string topic;
-    std::vector<User*> users;
-    std::map<User*, bool> operators; // true if the user is an operator
+class Channel 
+{
+    private:
+        std::string name;
+        std::string topic;
+        std::vector<User*> users;
+        std::map<User*, bool> operators; // true if the user is an operator
 
-public:
-    Channel(const std::string& channelName);
-    ~Channel();
-
+    public:
+        Channel(const std::string& channelName);
+        ~Channel();
+  
     void addUser(User* user, bool isOperator);
     void removeUser(User* user);
     bool hasUser(User* user) const;

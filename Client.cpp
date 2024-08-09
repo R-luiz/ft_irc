@@ -8,12 +8,15 @@ Client::Client(const Client& other)
       user(new User(*other.user)), 
       nickset(other.nickset),
       userset(other.userset),
-      buffer(other.buffer){
+      buffer(other.buffer)
+{
     user->setFd(Fd);
 }
 
-Client& Client::operator=(const Client& other) {
-    if (this != &other) {
+Client& Client::operator=(const Client& other)
+{
+    if (this != &other)
+    {
         Fd = other.Fd;
         IPadd = other.IPadd;
         authenticated = other.authenticated;
@@ -27,7 +30,8 @@ Client& Client::operator=(const Client& other) {
     return *this;
 }
 
-Client::~Client() {
+Client::~Client()
+{
     delete user;
 }
 
