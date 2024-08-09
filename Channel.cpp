@@ -15,6 +15,10 @@ void Channel::addUser(User* user, bool isOperator)
     {
 		users.push_back(user);
 		operators[user] = false;
+        if (isOperator) 
+        {
+            operators[user] = true;
+        }
     }
 }
 
