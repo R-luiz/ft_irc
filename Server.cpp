@@ -504,13 +504,14 @@ void Server::handleKick(int fd, const std::string& channelName, const std::strin
 
 bool Server::isNickInUse(const std::string& nick)
 {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
+    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    {
         if (it->getUser() && it->getUser()->getNick() == nick)
-        {
             return true;
-        }
+    }
     return false;
 }
+
 void Server::setClientNickname(int fd, std::string& nick)
 {
     Client* client = getClientByFd(fd);
