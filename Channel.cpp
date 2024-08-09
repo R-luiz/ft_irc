@@ -7,10 +7,10 @@ Channel::~Channel() {}
 void Channel::addUser(User* user) 
 {
 	if (user && std::find(users.begin(), users.end(), user) == users.end()) 
-  {
+    {
 		users.push_back(user);
 		operators[user] = false;
-  }
+    }
 }
 
 void Channel::removeUser(User* user) 
@@ -58,7 +58,8 @@ void Channel::setOperator(User* user, bool status)
 void Channel::broadcastMessage(const std::string& message, User* sender)
 {
     std::cout << "Broadcasting message in channel " << name << std::endl;
-    for (std::vector<User*>::iterator it = users.begin(); it != users.end(); ++it) {
+    for (std::vector<User*>::iterator it = users.begin(); it != users.end(); ++it) 
+    {
         if (*it && *it != sender)
         {
             int userFd = (*it)->getFd();
