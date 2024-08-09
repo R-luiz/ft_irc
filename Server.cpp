@@ -1,5 +1,6 @@
 
 #include "Server.hpp"
+#include <iostream>
 
 Server::Server()
 {
@@ -105,6 +106,10 @@ void Server::acceptNewClient()
     cli.setFd(incofd);
     cli.setIpAdd(inet_ntoa(cliadd.sin_addr));
     cli.getUser()->setFd(incofd);
+    cli.getUser()->setHostname(inet_ntoa(cliadd.sin_addr));
+    cli.getUser()->setRealName("Real Name");
+    cli.getUser()->setUser("Username");
+    cli.getUser()->setNick("Nick_");
     clients.push_back(cli);
     fds.push_back(NewPoll);
 
