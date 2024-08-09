@@ -2,28 +2,37 @@
 
 Client::Client() : Fd(-1), authenticated(false), user(new User()), nickset(false), userset(false) {}
 
-Client::Client(const Client& other) : Fd(other.Fd), IPadd(other.IPadd),  authenticated(other.authenticated),
-	  user(new User(*other.user)), buffer(other.buffer) 
+Client::Client(const Client& other)
+    : Fd(other.Fd), IPadd(other.IPadd), 
+      authenticated(other.authenticated),
+      user(new User(*other.user)), 
+      nickset(other.nickset),
+      userset(other.userset),
+      buffer(other.buffer)
 {
-		user->setFd(Fd);
+    user->setFd(Fd);
+}
+
+Client& Client::operator=(const Client& other)
+{
+    if (this != &other)
+    {
+        Fd = other.Fd;
+        IPadd = other.IPadd;
+        authenticated = other.authenticated;
+        delete user;
+        user = new User(*other.user);
+        buffer = other.buffer;
+        nickset = other.nickset;
+        userset = other.userset;
+        user->setFd(Fd);
+    }
+    return *this;
 }
 
 Client::~Client()
 {
-	delete user;
-}
-
-Client& Client::operator=(const Client& other) {
-	if (this != &other) 
-	{
-		Fd = other.Fd;
-		IPadd = other.IPadd;
-		delete user;
-		user = new User(*other.user);
-		buffer = other.buffer;
-		authenticated = other.authenticated;
-	}
-	return *this;
+    delete user;
 }
 
 void Client::setIpAdd(std::string ipadd)

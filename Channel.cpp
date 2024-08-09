@@ -2,10 +2,15 @@
 
 Channel::Channel(const std::string& channelName) : name(channelName), topic("") {}
 
-Channel::~Channel() {}
-
-void Channel::addUser(User* user) 
+Channel::~Channel()
 {
+    users.clear();
+    operators.clear();
+}
+
+void Channel::addUser(User* user, bool isOperator)
+{
+
 	if (user && std::find(users.begin(), users.end(), user) == users.end()) 
     {
 		users.push_back(user);
@@ -21,7 +26,12 @@ void Channel::removeUser(User* user)
 
 bool Channel::hasUser(User* user) const 
 {
-    return std::find(users.begin(), users.end(), user) != users.end();
+    if (!user) return false;
+    for (std::vector<User*>::const_iterator it = users.begin(); it != users.end(); ++it) {
+        if (*it && (*it)->getNick() == user->getNick())
+            return true;
+    }
+    return false;
 }
 
 void Channel::setTopic(const std::string& newTopic) 
@@ -63,18 +73,20 @@ void Channel::broadcastMessage(const std::string& message, User* sender)
         if (*it && *it != sender)
         {
             int userFd = (*it)->getFd();
-            if (userFd != -1)
-            {
-                std::cout << "Sending message to user " << (*it)->getNick() << " (fd: " << userFd << ")" << std::endl;
+            if (userFd != -1) {
                 ssize_t sent = send(userFd, message.c_str(), message.length(), 0);
-                if (sent == -1)
+                if (sent == -1) {
                     std::cerr << "Error sending message to user " << (*it)->getNick() << ": " << strerror(errno) << std::endl;
-                else if (static_cast<size_t>(sent) < message.length())
-                    std::cerr << "Incomplete message sent to user " << (*it)->getNick() << std::endl;
-            }
-            else
+                } else {
+                    std::cout << "Message sent successfully to user " << (*it)->getNick() << std::endl;
+                }
+            } else {
                 std::cerr << "Invalid fd for user " << (*it)->getNick() << std::endl;
+            }
+        } else if (*it == sender) {
+            std::cout << "Skipping sender: " << sender->getNick() << std::endl;
+        } else {
+            std::cout << "Null user encountered in channel" << std::endl;
         }
     }
 }
-
