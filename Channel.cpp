@@ -10,32 +10,28 @@ Channel::~Channel()
 
 void Channel::addUser(User* user, bool isOperator)
 {
-
-	if (user && std::find(users.begin(), users.end(), user) == users.end()) 
+    if (user && !user->getNick().empty())
     {
-		users.push_back(user);
-		operators[user] = false;
-        if (isOperator) 
-        {
-            operators[user] = true;
-        }
+        users[user->getNick()] = user;
+        operators[user->getNick()] = isOperator;
+        std::cout << "Added user " << user->getNick() << " to channel " << name << std::endl;
+    }
+    else
+    {
+        std::cerr << "Attempted to add invalid user to channel " << name << std::endl;
     }
 }
 
-void Channel::removeUser(User* user) 
+void Channel::removeUser(const std::string& nickname)
 {
-    users.erase(std::remove(users.begin(), users.end(), user), users.end());
-    operators.erase(user);
+    users.erase(nickname);
+    operators.erase(nickname);
 }
 
-bool Channel::hasUser(User* user) const 
+bool Channel::hasUser(const std::string& nickname) const
 {
-    if (!user) return false;
-    for (std::vector<User*>::const_iterator it = users.begin(); it != users.end(); ++it) {
-        if (*it && (*it)->getNick() == user->getNick())
-            return true;
-    }
-    return false;
+    std::cout << "Checking if user " << nickname << " is in channel " << name << std::endl;
+    return users.find(nickname) != users.end();
 }
 
 void Channel::setTopic(const std::string& newTopic) 
@@ -45,7 +41,7 @@ void Channel::setTopic(const std::string& newTopic)
 
 std::string Channel::getTopic() const 
 {
-	return topic.empty() ? "No topic is set" : topic;
+    return topic.empty() ? "No topic is set" : topic;
 }
 
 std::string Channel::getName() const 
@@ -53,44 +49,50 @@ std::string Channel::getName() const
     return name;
 }
 
-std::vector<User*> Channel::getUsers() const 
+std::map<std::string, User*> Channel::getUsers() const 
 {
     return users;
 }
 
-bool Channel::isOperator(User* user) const 
+bool Channel::isOperator(const std::string& nickname) const 
 {
-    std::map<User*, bool>::const_iterator it = operators.find(user);
+    std::map<std::string, bool>::const_iterator it = operators.find(nickname);
     return it != operators.end() && it->second;
 }
 
-void Channel::setOperator(User* user, bool status) 
+void Channel::setOperator(const std::string& nickname, bool status) 
 {
-    operators[user] = status;
+    operators[nickname] = status;
 }
 
 void Channel::broadcastMessage(const std::string& message, User* sender)
 {
     std::cout << "Broadcasting message in channel " << name << std::endl;
-    for (std::vector<User*>::iterator it = users.begin(); it != users.end(); ++it) 
+    for (std::map<std::string, User*>::const_iterator it = users.begin(); it != users.end(); ++it) 
     {
-        if (*it && *it != sender)
+        User* user = it->second;
+        if (user && user != sender)
         {
-            int userFd = (*it)->getFd();
-            if (userFd != -1) {
-                ssize_t sent = send(userFd, message.c_str(), message.length(), 0);
-                if (sent == -1) {
-                    std::cerr << "Error sending message to user " << (*it)->getNick() << ": " << strerror(errno) << std::endl;
+            try {
+                std::string nick = user->getNick();
+                int userFd = user->getFd();
+                std::cout << "Attempting to send message to user " << nick << " with fd " << userFd << std::endl;
+                
+                if (userFd != -1 && !message.empty()) {
+                    ssize_t sent = send(userFd, message.c_str(), message.length(), 0);
+                    if (sent == -1) {
+                        std::cerr << "Error sending message to user " << nick << ": " << strerror(errno) << std::endl;
+                    } else if (static_cast<size_t>(sent) < message.length()) {
+                        std::cerr << "Partial message sent to user " << nick << std::endl;
+                    } else {
+                        std::cout << "Message sent successfully to user " << nick << std::endl;
+                    }
                 } else {
-                    std::cout << "Message sent successfully to user " << (*it)->getNick() << std::endl;
+                    std::cerr << "Invalid fd or empty message for user " << nick << std::endl;
                 }
-            } else {
-                std::cerr << "Invalid fd for user " << (*it)->getNick() << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Exception caught while sending message to " << it->first << ": " << e.what() << std::endl;
             }
-        } else if (*it == sender) {
-            std::cout << "Skipping sender: " << sender->getNick() << std::endl;
-        } else {
-            std::cout << "Null user encountered in channel" << std::endl;
         }
     }
 }

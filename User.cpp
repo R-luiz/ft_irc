@@ -12,17 +12,17 @@ User::~User() {}
 
 std::string User::getNick() 
 {
-	return nickname;
+	return nickname.empty() ? "Unknown" : nickname;
 }
 
 std::string User::getUser() 
 {
-	return username;
+	return username.empty() ? "Unknown" : username;
 }
 
 std::string User::getHostname() 
 {
-	return hostname;
+	return hostname.empty() ? "Unknown" : hostname;
 }
 
 int User::getFd() 

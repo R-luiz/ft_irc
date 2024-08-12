@@ -79,7 +79,10 @@ void Client::setAuthenticated(bool auth)
 
 User* Client::getUser()
 {
-	return user;
+    if (!user) {
+        user = new User();
+    }
+    return user;
 }
 
 std::string Client::getIPadd()
