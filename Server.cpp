@@ -7,14 +7,20 @@ Server::Server()
 	serSocketFd = -1;
 }
 
-Server::~Server() {
+Server::~Server()
+{
+    {
+        for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+            delete *it;
+        }
+        clients.clear();
+    }
     for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); ++it) 
     {
         delete it->second;
     }
     channels.clear();
     closeFds();
-    clients.clear();
     fds.clear();
 }
 
@@ -27,8 +33,8 @@ void Server::clearClients(int fd) {
         }
     }
     
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->getFd() == fd) 
+    for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if ((*it)->getFd() == fd) 
         {
             clients.erase(it);
             break;
@@ -38,7 +44,7 @@ void Server::clearClients(int fd) {
 
 void Server::closeFds(){ //-> close the file descriptors
 	for(size_t i = 0; i < clients.size(); i++)//-> close the file descriptors of the clients
-		close(clients[i].getFd());
+		close(clients[i]->getFd());
 	if (serSocketFd != -1) //-> close the server socket file descriptor
 		close(serSocketFd);
 }
@@ -102,15 +108,13 @@ void Server::acceptNewClient()
     NewPoll.events = POLLIN;
     NewPoll.revents = 0;
 
-    Client cli;
-    cli.setFd(incofd);
-    cli.setIpAdd(inet_ntoa(cliadd.sin_addr));
-    cli.getUser()->setFd(incofd);
-    cli.getUser()->setHostname(inet_ntoa(cliadd.sin_addr));
-    cli.getUser()->setRealName("Real Name");
-    cli.getUser()->setUser("Username");
-    cli.getUser()->setNick("Nick_");
-    clients.push_back(cli);
+    Client* client = new Client();
+    client->setFd(incofd);
+    client->setIpAdd(inet_ntoa(cliadd.sin_addr));
+    client->setUser(new User("Nick_", "Username", incofd));
+    client->getUser()->setHostname(inet_ntoa(cliadd.sin_addr));
+    client->getUser()->setRealName("Real Name");
+    clients.push_back(client);
     fds.push_back(NewPoll);
 
     std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
@@ -209,17 +213,39 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
                               sender->getUser()->getUser() + "@" +
                               sender->getUser()->getHostname() +
                               " PRIVMSG " + target + " :" + message + "\r\n";
+    
+    std::cout << "Full message to be sent: " << fullMessage << std::endl;
+    
     if (target[0] == '#')
     {
         std::cout << "--2------>Channel message" << std::endl;
         Channel* channel = getChannel(target);
         if (channel)
         {
-            std::cout << "--3------>Channel message" << std::endl;
+            std::cout << "--3------>Channel found: " << channel->getName() << std::endl;
             std::string senderNick = sender->getUser()->getNick();
             if (channel->hasUser(senderNick))
             {
-                std::cout << "--4------>Channel message" << std::endl;
+                std::cout << "--4------>Sender " << senderNick << " is in the channel" << std::endl;
+                std::map<std::string, User*> channelUsers = channel->getUsers();
+                for (std::map<std::string, User*>::iterator it = channelUsers.begin(); it != channelUsers.end(); ++it)
+                {
+                    if (it->second && it->second != sender->getUser())
+                    {
+                        std::cout << "Checking user " << it->first << " before broadcast" << std::endl;
+                        Client* recipient = getClientByFd(it->second->getFd());
+                        if (recipient && recipient->isAuthenticated())
+                        {
+                            std::cout << "User " << it->first << " is authenticated and connected" << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "User " << it->first << " is not authenticated or not connected" << std::endl;
+                            channel->removeUser(it->first);
+                            continue;
+                        }
+                    }
+                }
                 try {
                     channel->broadcastMessage(fullMessage, sender->getUser());
                 }
@@ -230,7 +256,7 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
             }
             else
             {
-                std::cout << "--5------>Channel message" << std::endl;
+                std::cout << "--5------>Sender " << senderNick << " is not in the channel" << std::endl;
                 std::string error = ":server 404 " + senderNick + " " + target + " :Cannot send to channel\r\n";
                 send(senderFd, error.c_str(), error.length(), 0);
             }
@@ -241,7 +267,7 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
             send(senderFd, error.c_str(), error.length(), 0);
         }
     }
-    else 
+    else
     {
         // Private message
         if (target.empty() || !isValidNickname(target)) 
@@ -258,11 +284,11 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
         }
 
         Client* recipient = NULL;
-        for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+        for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) 
         {
-            if (it->getUser()->getNick() == target) 
+            if ((*it)->getUser()->getNick() == target) 
             {
-                recipient = &(*it);
+                recipient = *it;
                 break;
             }
         }
@@ -423,9 +449,9 @@ void Server::processClientInput(const char *buff, int fd)
 }
 
 Client* Server::getClientByNick(const std::string& nick) {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->getUser()->getNick() == nick) {
-            return &(*it);
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if ((*it)->getUser()->getNick() == nick) {
+            return (*it);
         }
     }
     return NULL;
@@ -502,9 +528,9 @@ void Server::handleKick(int fd, const std::string& channelName, const std::strin
 
 bool Server::isNickInUse(const std::string& nick)
 {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        if (it->getUser() && it->getUser()->getNick() == nick)
+        if ((*it)->getUser() && (*it)->getUser()->getNick() == nick)
             return true;
     }
     return false;
@@ -597,11 +623,11 @@ void Server::handlePing(int fd, const std::string& server)
 }
 
 Client* Server::getClientByFd(int fd) {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        if (it->getFd() == fd) 
+        if ((*it)->getFd() == fd) 
         {
-            return &(*it);
+            return (*it);
         }
     }
     return NULL;
@@ -618,14 +644,14 @@ void Server::disconnectClient(int fd) {
         }
     }
 
-    std::vector<Client>::iterator client_it;
+    std::vector<Client*>::iterator client_it;
     for (client_it = clients.begin(); client_it != clients.end(); ++client_it) 
     {
-        if (client_it->getFd() == fd) 
+        if ((*client_it)->getFd() == fd) 
         {
             std::map<std::string, Channel*>::iterator channel_it;
             for (channel_it = channels.begin(); channel_it != channels.end(); ++channel_it)
-                channel_it->second->removeUser(client_it->getUser()->getNick());
+                channel_it->second->removeUser((*client_it)->getUser()->getNick());
             clients.erase(client_it);
             break;
         }
@@ -662,11 +688,11 @@ void Server::receiveNewData(int fd)
             client->appendToBuffer(temp_buff);
             
             size_t pos;
-            while ((pos = client->buffer.find("\r\n")) != std::string::npos)
+            while ((pos = client->getBuffer().find("\r\n")) != std::string::npos)
             {
-                std::string command = client->buffer.substr(0, pos);
+                std::string command = client->getBuffer().substr(0, pos);
                 processClientInput(command.c_str(), fd);
-                client->buffer.erase(0, pos + 2);
+                client->getBuffer().erase(0, pos + 2);
             }
         }
         else
@@ -693,9 +719,9 @@ void Server::printServerState()
     outFile << "Number of clients: " << clients.size() << std::endl;
     outFile << std::endl;
     outFile << "=== Clients ===" << std::endl;
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        Client& client = *it;
+        Client& client = *(*it);
         outFile << "Client FD: " << client.getFd() << std::endl;
         outFile << "IP Address: " << client.getIPadd() << std::endl;
         outFile << "Authenticated: " << (client.isAuthenticated() ? "Yes" : "No") << std::endl;

@@ -37,7 +37,7 @@ class User //-> class for user
 
 	public:
 		User(); //-> default constructor
-		User(std::string nick, std::string user); //-> constructor with parameters
+		User(std::string nick, std::string user, int fd); //-> constructor with parameters
 		~User(); //-> destructor
 		std::string getNick(); //-> getter for nickname
 		std::string getUser(); //-> getter for username

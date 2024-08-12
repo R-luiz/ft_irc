@@ -37,9 +37,9 @@ class Client //-> class for client
 		User *user; //-> user object
 		bool nickset; //-> flag for nickname set
 		bool userset; //-> flag for username set
+		std::string buffer;
 		
 	public:
-		std::string buffer; //-> buffer for client
 		Client(); //-> default constructor
 		Client(const Client& other);
 		Client& operator=(const Client& other); //-> assignment operator
@@ -52,7 +52,7 @@ class Client //-> class for client
 		std::string& getBuffer(); //-> getter for buffer
 		bool isAuthenticated(); //-> getter for authenticated
 		void setAuthenticated(bool auth); //-> setter for authenticated
-		User* getUser(); //-> getter for user
+		User* getUser() const; //-> getter for user
 		std::string getIPadd(); //-> getter for ipadd
 		void setIPadd(std::string ipadd); //-> setter for ipadd
 		void setUser(User* user); //-> setter for user
@@ -60,7 +60,8 @@ class Client //-> class for client
 		void setNickSet(bool set); //-> setter for nickset
 		bool isUserSet(); //-> getter for userset
 		void setUserSet(bool set); //-> setter for userset
-
+		bool isConnected() const;
+		std::string getBuffer() const;
 };
 
 #endif
