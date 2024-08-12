@@ -39,7 +39,7 @@ class Server //-> class for server
 		std::string Pass; //-> server password
 		int serSocketFd; //-> server socket file descriptor
 		static bool Signal; //-> static boolean for signal
-		std::vector<Client> clients; //-> vector of clients
+		std::vector<Client *> clients; //-> vector of clients
 		std::vector<struct pollfd> fds; //-> vector of pollfd
 		std::map<std::string, Channel*> channels; //-> map of channels
 
@@ -78,7 +78,6 @@ class Server //-> class for server
 		Client* getClientByNick(const std::string& nick); //-> get client by nickname
 		void handlePart(int fd, const std::string& channelName, const std::string& reason); //-> handle part command
 		void handleKick(int fd, const std::string& channelName, const std::string& targetNick, const std::string& reason);
-
 };
 
 #endif

@@ -1,28 +1,24 @@
 #include "User.hpp"
 
-User::User() : nickname(""), username(""), hostname(""), realname(""), fd(0) {}
+User::User() : nickname(""), username(""), hostname(""), realname(""), fd(-1) {}
 
-User::User(std::string nick, std::string user) 
-{
-	nickname = nick;
-	username = user;
-}
+User::User(std::string nick, std::string user, int fd) : nickname(nick), username(user), fd(fd) {}
 
 User::~User() {}
 
 std::string User::getNick() 
 {
-	return nickname;
+	return nickname.empty() ? "Unknown" : nickname;
 }
 
 std::string User::getUser() 
 {
-	return username;
+	return username.empty() ? "Unknown" : username;
 }
 
 std::string User::getHostname() 
 {
-	return hostname;
+	return hostname.empty() ? "Unknown" : hostname;
 }
 
 int User::getFd() 

@@ -1,19 +1,26 @@
 
 #include "Server.hpp"
+#include <iostream>
 
 Server::Server()
 {
 	serSocketFd = -1;
 }
 
-Server::~Server() {
+Server::~Server()
+{
+    {
+        for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+            delete *it;
+        }
+        clients.clear();
+    }
     for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); ++it) 
     {
         delete it->second;
     }
     channels.clear();
     closeFds();
-    clients.clear();
     fds.clear();
 }
 
@@ -26,8 +33,8 @@ void Server::clearClients(int fd) {
         }
     }
     
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->getFd() == fd) 
+    for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if ((*it)->getFd() == fd) 
         {
             clients.erase(it);
             break;
@@ -37,7 +44,7 @@ void Server::clearClients(int fd) {
 
 void Server::closeFds(){ //-> close the file descriptors
 	for(size_t i = 0; i < clients.size(); i++)//-> close the file descriptors of the clients
-		close(clients[i].getFd());
+		close(clients[i]->getFd());
 	if (serSocketFd != -1) //-> close the server socket file descriptor
 		close(serSocketFd);
 }
@@ -101,11 +108,13 @@ void Server::acceptNewClient()
     NewPoll.events = POLLIN;
     NewPoll.revents = 0;
 
-    Client cli;
-    cli.setFd(incofd);
-    cli.setIpAdd(inet_ntoa(cliadd.sin_addr));
-    cli.getUser()->setFd(incofd);
-    clients.push_back(cli);
+    Client* client = new Client();
+    client->setFd(incofd);
+    client->setIpAdd(inet_ntoa(cliadd.sin_addr));
+    client->setUser(new User("Nick_", "Username", incofd));
+    client->getUser()->setHostname(inet_ntoa(cliadd.sin_addr));
+    client->getUser()->setRealName("Real Name");
+    clients.push_back(client);
     fds.push_back(NewPoll);
 
     std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
@@ -200,35 +209,55 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
         std::cerr << "Error: Invalid sender in handlePrivmsg" << std::endl;
         return;
     }
+    std::string fullMessage = ":" + sender->getUser()->getNick() + "!" +
+                              sender->getUser()->getUser() + "@" +
+                              sender->getUser()->getHostname() +
+                              " PRIVMSG " + target + " :" + message + "\r\n";
+    
+    std::cout << "Full message to be sent: " << fullMessage << std::endl;
+    
     if (target[0] == '#')
     {
         std::cout << "--2------>Channel message" << std::endl;
         Channel* channel = getChannel(target);
         if (channel)
         {
-            std::cout << "--3------>Channel message" << std::endl;
-            User* senderUser = sender->getUser();
-            if (senderUser && channel->hasUser(senderUser))
+            std::cout << "--3------>Channel found: " << channel->getName() << std::endl;
+            std::string senderNick = sender->getUser()->getNick();
+            if (channel->hasUser(senderNick))
             {
-                std::cout << "--4------>Channel message" << std::endl;
-                std::string fullMessage;
-                try
+                std::cout << "--4------>Sender " << senderNick << " is in the channel" << std::endl;
+                std::map<std::string, User*> channelUsers = channel->getUsers();
+                for (std::map<std::string, User*>::iterator it = channelUsers.begin(); it != channelUsers.end(); ++it)
                 {
-                    fullMessage = ":" + senderUser->getNick() + "!" +
-                                  senderUser->getUser() + "@" +
-                                  senderUser->getHostname() +
-                                  " PRIVMSG " + target + " :" + message + "\r\n";
-                } catch (const std::exception& e)
-                {
-                    std::cerr << "Error creating message string: " << e.what() << std::endl;
-                    return;
+                    if (it->second && it->second != sender->getUser())
+                    {
+                        std::cout << "Checking user " << it->first << " before broadcast" << std::endl;
+                        Client* recipient = getClientByFd(it->second->getFd());
+                        if (recipient && recipient->isAuthenticated())
+                        {
+                            std::cout << "User " << it->first << " is authenticated and connected" << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "User " << it->first << " is not authenticated or not connected" << std::endl;
+                            channel->removeUser(it->first);
+                            continue;
+                        }
+                    }
                 }
-                channel->broadcastMessage(fullMessage, senderUser);
+                try {
+                    channel->broadcastMessage(fullMessage, sender->getUser());
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error in handlePrivmsg: " << e.what() << std::endl;
+                }
             }
             else
             {
-                std::cout << "--5------>Channel message" << std::endl;
-                std::string error = ":server 404 " + senderUser->getNick() + " " + target + " :Cannot send to channel\r\n";
+                std::cout << "--5------>Sender " << senderNick << " is not in the channel" << std::endl;
+                std::string error = ":server 404 " + senderNick + " " + target + " :Cannot send to channel\r\n";
                 send(senderFd, error.c_str(), error.length(), 0);
             }
         } 
@@ -237,8 +266,8 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
             std::string error = ":server 403 " + sender->getUser()->getNick() + " " + target + " :No such channel\r\n";
             send(senderFd, error.c_str(), error.length(), 0);
         }
-    } 
-    else 
+    }
+    else
     {
         // Private message
         if (target.empty() || !isValidNickname(target)) 
@@ -255,11 +284,11 @@ void Server::handlePrivmsg(int senderFd, const std::string& target, const std::s
         }
 
         Client* recipient = NULL;
-        for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+        for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) 
         {
-            if (it->getUser()->getNick() == target) 
+            if ((*it)->getUser()->getNick() == target) 
             {
-                recipient = &(*it);
+                recipient = *it;
                 break;
             }
         }
@@ -420,9 +449,9 @@ void Server::processClientInput(const char *buff, int fd)
 }
 
 Client* Server::getClientByNick(const std::string& nick) {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->getUser()->getNick() == nick) {
-            return &(*it);
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if ((*it)->getUser()->getNick() == nick) {
+            return (*it);
         }
     }
     return NULL;
@@ -441,7 +470,7 @@ void Server::handlePart(int fd, const std::string& channelName, const std::strin
         return;
     }
 
-    if (!channel->hasUser(client->getUser())) {
+    if (!channel->hasUser(client->getUser()->getNick())) {
         std::string error = ":server 442 " + client->getUser()->getNick() + " " + channelName + " :You're not on that channel\r\n";
         send(fd, error.c_str(), error.length(), 0);
         return;
@@ -451,9 +480,8 @@ void Server::handlePart(int fd, const std::string& channelName, const std::strin
                               " PART " + channelName + " :" + reason + "\r\n";
     
     channel->broadcastMessage(partMessage, NULL);
-    channel->removeUser(client->getUser());
+    channel->removeUser(client->getUser()->getNick());
 
-    // Send the PART message to the leaving user as well
     send(fd, partMessage.c_str(), partMessage.length(), 0);
 }
 
@@ -471,42 +499,38 @@ void Server::handleKick(int fd, const std::string& channelName, const std::strin
         return;
     }
 
-    if (!channel->isOperator(kicker->getUser())) {
+    if (!channel->isOperator(kicker->getUser()->getNick())) {
         std::string error = ":server 482 " + kicker->getUser()->getNick() + " " + channelName + " :You're not channel operator\r\n";
         send(fd, error.c_str(), error.length(), 0);
         return;
     }
 
     Client* target = getClientByNick(targetNick);
-    if (!target || !channel->hasUser(target->getUser())) {
+    if (!target || !channel->hasUser(targetNick)) {
         std::string error = ":server 441 " + kicker->getUser()->getNick() + " " + targetNick + " " + channelName + " :They aren't on that channel\r\n";
         send(fd, error.c_str(), error.length(), 0);
         return;
     }
 
-    // Prepare and send the KICK message
     std::string kickMessage = ":" + kicker->getUser()->getNick() + "!" + kicker->getUser()->getUser() + "@" + kicker->getUser()->getHostname() +
                               " KICK " + channelName + " " + targetNick + " :" + reason + "\r\n";
     channel->broadcastMessage(kickMessage, NULL);
 
-    // Prepare and send the PART message
     std::string partMessage = ":" + targetNick + "!" + target->getUser()->getUser() + "@" + target->getUser()->getHostname() +
                               " PART " + channelName + " :Kicked by " + kicker->getUser()->getNick() + "\r\n";
     channel->broadcastMessage(partMessage, NULL);
 
-    // Remove the user from the channel
-    channel->removeUser(target->getUser());
+    channel->removeUser(targetNick);
 
-    // Send both KICK and PART messages to the kicked user
     send(target->getFd(), kickMessage.c_str(), kickMessage.length(), 0);
     send(target->getFd(), partMessage.c_str(), partMessage.length(), 0);
 }
 
 bool Server::isNickInUse(const std::string& nick)
 {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client *>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        if (it->getUser() && it->getUser()->getNick() == nick)
+        if ((*it)->getUser() && (*it)->getUser()->getNick() == nick)
             return true;
     }
     return false;
@@ -599,11 +623,11 @@ void Server::handlePing(int fd, const std::string& server)
 }
 
 Client* Server::getClientByFd(int fd) {
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        if (it->getFd() == fd) 
+        if ((*it)->getFd() == fd) 
         {
-            return &(*it);
+            return (*it);
         }
     }
     return NULL;
@@ -620,15 +644,14 @@ void Server::disconnectClient(int fd) {
         }
     }
 
-    std::vector<Client>::iterator client_it;
+    std::vector<Client*>::iterator client_it;
     for (client_it = clients.begin(); client_it != clients.end(); ++client_it) 
     {
-        if (client_it->getFd() == fd) 
+        if ((*client_it)->getFd() == fd) 
         {
-            // Remove the client from all channels
             std::map<std::string, Channel*>::iterator channel_it;
             for (channel_it = channels.begin(); channel_it != channels.end(); ++channel_it)
-                channel_it->second->removeUser(client_it->getUser());
+                channel_it->second->removeUser((*client_it)->getUser()->getNick());
             clients.erase(client_it);
             break;
         }
@@ -665,11 +688,11 @@ void Server::receiveNewData(int fd)
             client->appendToBuffer(temp_buff);
             
             size_t pos;
-            while ((pos = client->buffer.find("\r\n")) != std::string::npos)
+            while ((pos = client->getBuffer().find("\r\n")) != std::string::npos)
             {
-                std::string command = client->buffer.substr(0, pos);
+                std::string command = client->getBuffer().substr(0, pos);
                 processClientInput(command.c_str(), fd);
-                client->buffer.erase(0, pos + 2);
+                client->getBuffer().erase(0, pos + 2);
             }
         }
         else
@@ -696,9 +719,9 @@ void Server::printServerState()
     outFile << "Number of clients: " << clients.size() << std::endl;
     outFile << std::endl;
     outFile << "=== Clients ===" << std::endl;
-    for (std::vector<Client>::iterator it = clients.begin(); it != clients.end(); ++it) 
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) 
     {
-        Client& client = *it;
+        Client& client = *(*it);
         outFile << "Client FD: " << client.getFd() << std::endl;
         outFile << "IP Address: " << client.getIPadd() << std::endl;
         outFile << "Authenticated: " << (client.isAuthenticated() ? "Yes" : "No") << std::endl;
@@ -807,23 +830,26 @@ void Server::handleJoin(int fd, const std::string& channelName)
         return;
     }
     User* user = client->getUser();
-    if (channel->hasUser(user))
+    std::string nick = user->getNick();
+    
+    if (channel->hasUser(nick))
     {
-        std::string error = ":server 443 " + user->getNick() + " " + channelName + " :is already on channel\r\n";
+        std::string error = ":server 443 " + nick + " " + channelName + " :is already on channel\r\n";
         send(fd, error.c_str(), error.length(), 0);
         return;
     }
+    
     bool isFirstUser = channel->getUsers().empty();
     channel->addUser(user, isFirstUser);
 
-    std::string joinMessage = ":" + user->getNick() + "!" + user->getUser() + "@" + user->getHostname() + " JOIN :" + channelName + "\r\n";
-    send(fd, joinMessage.c_str(), joinMessage.length(), 0);
+    std::string joinMessage = ":" + nick + "!" + user->getUser() + "@" + user->getHostname() + " JOIN :" + channelName + "\r\n";
+    send(fd, joinMessage.c_str(), joinMessage.length(), 0);  // Envoyer le message à l'utilisateur qui rejoint
+    channel->broadcastMessage(joinMessage, user);  // Diffuser à tous les autres utilisateurs
 
-    std::string topicMessage = ":server 332 " + user->getNick() + " " + channelName + " :" + channel->getTopic() + "\r\n";
+    std::string topicMessage = ":server 332 " + nick + " " + channelName + " :" + channel->getTopic() + "\r\n";
     send(fd, topicMessage.c_str(), topicMessage.length(), 0);
 
     sendChannelUserList(fd, channel);
-    channel->broadcastMessage(joinMessage, user);
 }
 
 Channel* Server::getOrCreateChannel(const std::string& channelName) 
@@ -850,17 +876,17 @@ void Server::sendChannelUserList(int fd, Channel* channel)
     try 
     {
         std::string userList = ":server 353 " + client->getUser()->getNick() + " = " + channel->getName() + " :";
-        std::vector<User*> users = channel->getUsers();
+        std::map<std::string, User*> users = channel->getUsers();
         
-        for (std::vector<User*>::const_iterator it = users.begin(); it != users.end(); ++it) 
+        for (std::map<std::string, User*>::const_iterator it = users.begin(); it != users.end(); ++it) 
         {
-            if (*it) 
+            if (it->second) 
             {
-                if (channel->isOperator(*it)) 
+                if (channel->isOperator(it->first)) 
                 {
                     userList += "@";
                 }
-                userList += (*it)->getNick() + " ";
+                userList += it->first + " ";
             }
         }
         userList += "\r\n";
