@@ -29,10 +29,9 @@ Client& Client::operator=(const Client& other) {
         return *this;
     }
 
-Client::~Client()
-{
-    delete user;
-}
+Client::~Client() {
+        delete user;
+    }
 
 void Client::setIpAdd(std::string ipadd)
 {
