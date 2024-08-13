@@ -387,12 +387,6 @@ void Server::processClientInput(const char *buff, int fd)
         iss >> username;
         setClientUsername(fd, username, "", "");
     }
-    else if (command == "MODE") 
-    {
-        std::string channel, mode;
-        iss >> channel >> mode;
-        handleMode(fd, channel, mode);
-    }
     else if (command == "WHOIS") 
     {
         std::string target;
@@ -405,11 +399,27 @@ void Server::processClientInput(const char *buff, int fd)
         iss >> server;
         handlePing(fd, server);
     }
+    else if (command == "MODE") 
+    {
+        std::string channelName, modeString;
+        std::vector<std::string> args;
+        iss >> channelName >> modeString;
+        std::string arg;
+        while (iss >> arg) {
+            args.push_back(arg);
+        }
+        std::cout << "Received MODE command: " << channelName << " " << modeString;
+        for (std::vector<std::string>::const_iterator it = args.begin(); it != args.end(); ++it) {
+            std::cout << " " << *it;
+        }
+        std::cout << std::endl;
+        handleMode(fd, channelName, modeString, args);
+    }
     else if (command == "JOIN") 
     {
-        std::string channelName;
-        iss >> channelName;
-        handleJoin(fd, channelName);
+        std::string channelName, key;
+        iss >> channelName >> key;
+        handleJoin(fd, channelName, key);
     }
     else if (command == "PRIVMSG") 
     {
@@ -441,6 +451,22 @@ void Server::processClientInput(const char *buff, int fd)
         else if (reason[0] == ':')
             reason = reason.substr(1);
         handlePart(fd, channelName, reason);
+    }
+    else if (command == "INVITE")
+    {
+    std::string nick, channelName;
+    iss >> nick >> channelName;
+    handleInvite(fd, nick, channelName);
+    }
+    else if (command == "TOPIC")
+    {
+    std::string channelName, newTopic;
+    iss >> channelName;
+    std::getline(iss >> std::ws, newTopic);
+    if (!newTopic.empty() && newTopic[0] == ':') {
+        newTopic = newTopic.substr(1);
+    }
+    handleTopic(fd, channelName, newTopic);
     }
     else {
         std::string error = "421 * " + command + " :Unknown command\r\n";
@@ -551,10 +577,15 @@ void Server::setClientNickname(int fd, std::string& nick)
         send(fd, error.c_str(), error.length(), 0);
         return;
     }
-    bool isInUse = isNickInUse(nick);
+    
+    if (isNickInUse(nick))
+    {
+        std::string error = "433 * " + nick + " :Nickname is already in use\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
     std::string oldNick = client->getUser()->getNick();
-    if (isInUse)
-        nick = nick + "_2";
     client->getUser()->setNick(nick);
     client->setNickSet(true);
 
@@ -564,6 +595,18 @@ void Server::setClientNickname(int fd, std::string& nick)
     else
         response = ":" + oldNick + "!" + client->getUser()->getUser() + "@" + client->getUser()->getHostname() + " NICK :" + nick + "\r\n";
     send(fd, response.c_str(), response.length(), 0);
+
+    // Update nickname in all channels the user is in
+    std::map<std::string, Channel*>::iterator it;
+    for (it = channels.begin(); it != channels.end(); ++it)
+    {
+        Channel* channel = it->second;
+        if (channel->hasUser(oldNick))
+        {
+            channel->removeUser(oldNick);
+            channel->addUser(client->getUser(), channel->isOperator(oldNick));
+        }
+    }
 
     checkRegistration(client);
 }
@@ -814,7 +857,7 @@ void Server::handleChannelMessage(int senderFd, const std::string& channelName, 
     channel->broadcastMessage(formattedMessage, sender);
 }
 
-void Server::handleJoin(int fd, const std::string& channelName) 
+void Server::handleJoin(int fd, const std::string& channelName, const std::string& key) 
 {
     Client* client = getClientByFd(fd);
     if (!client || !client->getUser()) 
@@ -839,12 +882,33 @@ void Server::handleJoin(int fd, const std::string& channelName)
         return;
     }
     
+    if (channel->isInviteOnly() && !channel->isInvited(nick))
+    {
+        std::string error = ":server 473 " + nick + " " + channelName + " :Cannot join channel (+i)\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (!channel->checkKey(key))
+    {
+        std::string error = ":server 475 " + nick + " " + channelName + " :Cannot join channel (+k)\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (channel->isAtCapacity())
+    {
+        std::string error = ":server 471 " + nick + " " + channelName + " :Cannot join channel (+l)\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+    
     bool isFirstUser = channel->getUsers().empty();
     channel->addUser(user, isFirstUser);
 
     std::string joinMessage = ":" + nick + "!" + user->getUser() + "@" + user->getHostname() + " JOIN :" + channelName + "\r\n";
-    send(fd, joinMessage.c_str(), joinMessage.length(), 0);  // Envoyer le message à l'utilisateur qui rejoint
-    channel->broadcastMessage(joinMessage, user);  // Diffuser à tous les autres utilisateurs
+    send(fd, joinMessage.c_str(), joinMessage.length(), 0);  // Send the message to the user who is joining
+    channel->broadcastMessage(joinMessage, user);  // Broadcast to all other users
 
     std::string topicMessage = ":server 332 " + nick + " " + channelName + " :" + channel->getTopic() + "\r\n";
     send(fd, topicMessage.c_str(), topicMessage.length(), 0);
@@ -937,4 +1001,192 @@ int main(int argc, char *argv[])
 		std::cerr << e.what() << std::endl;
 	}
 	std::cout << "The Server Closed!" << std::endl;
+}
+
+void Server::handleInvite(int fd, const std::string& nick, const std::string& channelName) {
+    Client* inviter = getClientByFd(fd);
+    if (!inviter || !inviter->getUser()) 
+    {
+        std::cerr << "Invalid inviter in handleInvite" << std::endl;
+        return;
+    }
+
+    Channel* channel = getChannel(channelName);
+    if (!channel)
+    {
+        std::string error = ":server 403 " + inviter->getUser()->getNick() + " " + channelName + " :No such channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (!channel->isOperator(inviter->getUser()->getNick()))
+    {
+        std::string error = ":server 482 " + inviter->getUser()->getNick() + " " + channelName + " :You're not channel operator\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    Client* invitee = getClientByNick(nick);
+    if (!invitee)
+    {
+        std::string error = ":server 401 " + inviter->getUser()->getNick() + " " + nick + " :No such nick\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (channel->hasUser(nick))
+    {
+        std::string error = ":server 443 " + inviter->getUser()->getNick() + " " + nick + " " + channelName + " :is already on channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    std::string inviteMsg = ":" + inviter->getUser()->getNick() + "!" + inviter->getUser()->getUser() + "@" + inviter->getUser()->getHostname() +
+                            " INVITE " + nick + " :" + channelName + "\r\n";
+    send(invitee->getFd(), inviteMsg.c_str(), inviteMsg.length(), 0);
+
+    std::string confirmMsg = ":server 341 " + inviter->getUser()->getNick() + " " + nick + " " + channelName + "\r\n";
+    send(fd, confirmMsg.c_str(), confirmMsg.length(), 0);
+
+    channel->addInvitedUser(nick);
+}
+
+void Server::handleTopic(int fd, const std::string& channelName, const std::string& newTopic) {
+    Client* client = getClientByFd(fd);
+    if (!client || !client->getUser())
+    {
+        std::cerr << "Invalid client in handleTopic" << std::endl;
+        return;
+    }
+
+    Channel* channel = getChannel(channelName);
+    if (!channel)
+    {
+        std::string error = ":server 403 " + client->getUser()->getNick() + " " + channelName + " :No such channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (!channel->hasUser(client->getUser()->getNick()))
+    {
+        std::string error = ":server 442 " + client->getUser()->getNick() + " " + channelName + " :You're not on that channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (newTopic.empty())
+    {
+        // User is requesting the current topic
+        std::string currentTopic = channel->getTopic();
+        std::string response = ":server 332 " + client->getUser()->getNick() + " " + channelName + " :" + currentTopic + "\r\n";
+        send(fd, response.c_str(), response.length(), 0);
+    }
+    else
+    {
+        // User is trying to set a new topic
+        if (channel->isTopicRestricted() && !channel->isOperator(client->getUser()->getNick())) {
+            std::string error = ":server 482 " + client->getUser()->getNick() + " " + channelName + " :You're not channel operator\r\n";
+            send(fd, error.c_str(), error.length(), 0);
+            return;
+        }
+
+        channel->setTopic(newTopic);
+        std::string topicMessage = ":" + client->getUser()->getNick() + "!" + client->getUser()->getUser() + "@" + client->getUser()->getHostname() +
+                                   " TOPIC " + channelName + " :" + newTopic + "\r\n";
+        channel->broadcastMessage(topicMessage, NULL);
+    }
+}
+
+void Server::handleMode(int fd, const std::string& channelName, const std::string& modeString, const std::vector<std::string>& args) {
+    std::cout << "Handling MODE command: " << channelName << " " << modeString << std::endl;
+    
+    Client* client = getClientByFd(fd);
+    if (!client || !client->getUser()) {
+        std::cerr << "Invalid client in handleMode" << std::endl;
+        return;
+    }
+
+    Channel* channel = getChannel(channelName);
+    if (!channel) {
+        std::string error = ":server 403 " + client->getUser()->getNick() + " " + channelName + " :No such channel\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    if (!channel->isOperator(client->getUser()->getNick())) {
+        std::string error = ":server 482 " + client->getUser()->getNick() + " " + channelName + " :You're not channel operator\r\n";
+        send(fd, error.c_str(), error.length(), 0);
+        return;
+    }
+
+    bool adding = true;
+    size_t argIndex = 0;
+    std::string modeChanges;
+    std::string modeArgs;
+
+    for (size_t i = 0; i < modeString.length(); ++i) {
+        char mode = modeString[i];
+        if (mode == '+') {
+            adding = true;
+            modeChanges += '+';
+        } else if (mode == '-') {
+            adding = false;
+            modeChanges += '-';
+        } else {
+            modeChanges += mode;
+            switch (mode) {
+                case 'i': // Invite-only
+                    channel->setInviteOnly(adding);
+                    std::cout << "Set invite-only mode to " << (adding ? "on" : "off") << " for channel " << channelName << std::endl;
+                    break;
+                case 't': // Topic restriction
+                    channel->setTopicRestricted(adding);
+                    std::cout << "Set topic restriction mode to " << (adding ? "on" : "off") << " for channel " << channelName << std::endl;
+                    break;
+                case 'k': // Channel key (password)
+                    if (adding && argIndex < args.size()) {
+                        channel->setKey(args[argIndex]);
+                        modeArgs += " " + args[argIndex];
+                        ++argIndex;
+                        std::cout << "Set channel key for " << channelName << std::endl;
+                    } else if (!adding) {
+                        channel->setKey("");
+                        std::cout << "Removed channel key for " << channelName << std::endl;
+                    }
+                    break;
+                case 'o': // Operator status
+                    if (argIndex < args.size()) {
+                        channel->setOperator(args[argIndex], adding);
+                        modeArgs += " " + args[argIndex];
+                        ++argIndex;
+                        std::cout << (adding ? "Set" : "Removed") << " operator status for " << args[argIndex-1] << " in channel " << channelName << std::endl;
+                    }
+                    break;
+                case 'l': // User limit
+                    if (adding && argIndex < args.size()) {
+                        channel->setUserLimit(std::atoi(args[argIndex].c_str()));
+                        modeArgs += " " + args[argIndex];
+                        ++argIndex;
+                        std::cout << "Set user limit to " << args[argIndex-1] << " for channel " << channelName << std::endl;
+                    } else if (!adding) {
+                        channel->setUserLimit(0);
+                        std::cout << "Removed user limit for channel " << channelName << std::endl;
+                    }
+                    break;
+                default:
+                    std::cout << "Unknown mode: " << mode << std::endl;
+                    break;
+            }
+        }
+    }
+
+    // Create the mode change message
+    std::string modeChangeMsg = ":" + client->getUser()->getNick() + "!" + client->getUser()->getUser() + "@" + client->getUser()->getHostname() +
+                                " MODE " + channelName + " " + modeChanges + modeArgs + "\r\n";
+
+    // Broadcast mode changes to all users in the channel, including the sender
+    channel->broadcastMessage(modeChangeMsg, NULL);
+
+    // We no longer need to send a separate message to the client who set the mode
+    // as they will receive the broadcast message
 }
