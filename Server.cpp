@@ -9,12 +9,14 @@ Server::Server()
 
 Server::~Server()
 {
-    {
-        for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
-            delete *it;
+    for (std::vector<Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (*it) {
+            delete (*it)->getUser();  // Delete the User object
+            delete *it;  // Delete the Client object
         }
-        clients.clear();
     }
+    clients.clear();
+
     for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); ++it) 
     {
         delete it->second;
@@ -692,9 +694,12 @@ void Server::disconnectClient(int fd) {
     {
         if ((*client_it)->getFd() == fd) 
         {
+            // Remove user from channels
             std::map<std::string, Channel*>::iterator channel_it;
             for (channel_it = channels.begin(); channel_it != channels.end(); ++channel_it)
                 channel_it->second->removeUser((*client_it)->getUser()->getNick());
+            
+            delete *client_it;  // This will also delete the User object
             clients.erase(client_it);
             break;
         }
@@ -825,7 +830,7 @@ void Server::serverInit(int port, std::string pass)
                 {
                     std::cout << RED << "Client <" << fds[i].fd << "> Disconnected" << WHI << std::endl;
                     disconnectClient(fds[i].fd);
-                    --i; // Decrement i because we removed an element from fds
+                    --i;
                 }
             }
         }
