@@ -1,6 +1,7 @@
 #include "Channel.hpp"
 
-Channel::Channel(const std::string& channelName) : name(channelName), topic("") {}
+Channel::Channel(const std::string& channelName) 
+    : name(channelName), topic(""), topicRestricted(false), inviteOnly(false), key(""), userLimit(0) {}
 
 Channel::~Channel()
 {
@@ -116,4 +117,60 @@ void Channel::broadcastMessage(const std::string& message, User* sender)
             }
         }
     }
+}
+
+void Channel::addInvitedUser(const std::string& nickname) {
+    invitedUsers.insert(nickname);
+}
+
+bool Channel::isInvited(const std::string& nickname) const {
+    return invitedUsers.find(nickname) != invitedUsers.end();
+}
+
+void Channel::setTopicRestricted(bool restricted) {
+    topicRestricted = restricted;
+}
+
+bool Channel::isTopicRestricted() const {
+    return topicRestricted;
+}
+
+std::string Channel::getModes() const {
+    std::string modes = "+";
+    if (inviteOnly) modes += "i";
+    if (topicRestricted) modes += "t";
+    if (!key.empty()) modes += "k";
+    if (userLimit > 0) modes += "l";
+    return modes;
+}
+
+void Channel::setInviteOnly(bool inviteOnly) {
+    std::cout << "Setting invite-only mode to " << (inviteOnly ? "true" : "false") << " for channel " << name << std::endl;
+    this->inviteOnly = inviteOnly;
+}
+
+void Channel::setKey(const std::string& newKey) {
+    std::cout << "Setting key to '" << newKey << "' for channel " << name << std::endl;
+    this->key = newKey;
+}
+
+void Channel::setUserLimit(size_t limit) {
+    std::cout << "Setting user limit to " << limit << " for channel " << name << std::endl;
+    this->userLimit = limit;
+}
+
+bool Channel::isInviteOnly() const {
+    return inviteOnly;
+}
+
+bool Channel::checkKey(const std::string& providedKey) const {
+    return key.empty() || key == providedKey;
+}
+
+size_t Channel::getUserLimit() const {
+    return userLimit;
+}
+
+bool Channel::isAtCapacity() const {
+    return userLimit > 0 && users.size() >= userLimit;
 }

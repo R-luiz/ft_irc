@@ -66,7 +66,6 @@ class Server //-> class for server
 		bool isNickInUse(const std::string& nick); //-> check if the nickname is in use
 		void printServerState(); //-> print server state in log file
 		void setClientUsername(int fd, const std::string& username, const std::string& hostname, const std::string& realname);
-		void handleJoin(int fd, const std::string& channelName); //-> handle join command
 		Channel* getOrCreateChannel(const std::string& channelName); //-> get or create channel
 		void sendChannelUserList(int fd, Channel* channel); //-> send channel user list
 		void handleChannelMessage(int senderFd, const std::string& channelName, const std::string& message);
@@ -78,6 +77,11 @@ class Server //-> class for server
 		Client* getClientByNick(const std::string& nick); //-> get client by nickname
 		void handlePart(int fd, const std::string& channelName, const std::string& reason); //-> handle part command
 		void handleKick(int fd, const std::string& channelName, const std::string& targetNick, const std::string& reason);
+		void handleInvite(int fd, const std::string& nick, const std::string& channelName);
+		void handleTopic(int fd, const std::string& channelName, const std::string& newTopic);
+		void handleMode(int fd, const std::string& channelName, const std::string& modeString, const std::vector<std::string>& args);
+    	void handleJoin(int fd, const std::string& channelName, const std::string& key);
+    
 };
 
 #endif

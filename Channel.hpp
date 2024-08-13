@@ -7,6 +7,7 @@
 #include "User.hpp"
 #include <algorithm>
 #include <iostream>
+#include <set>
 
 class User;
 
@@ -16,7 +17,12 @@ class Channel
         std::string name;
         std::string topic;
         std::map<std::string, User*> users;
-        std::map<std::string, bool> operators; // true if the user is an operator
+        std::map<std::string, bool> operators;
+        std::set<std::string> invitedUsers;
+        bool topicRestricted;
+        bool inviteOnly;
+        std::string key;
+        size_t userLimit;
 
     public:
         Channel(const std::string& channelName);
@@ -32,6 +38,18 @@ class Channel
         bool isOperator(const std::string& nickname) const;
         void setOperator(const std::string& nickname, bool status);
         void broadcastMessage(const std::string& message, User* sender);
+        void addInvitedUser(const std::string& nickname);
+        bool isInvited(const std::string& nickname) const;
+        void setTopicRestricted(bool restricted);
+        bool isTopicRestricted() const;
+        void setInviteOnly(bool inviteOnly);
+        bool isInviteOnly() const;
+        void setKey(const std::string& newKey);
+        bool checkKey(const std::string& providedKey) const;
+        void setUserLimit(size_t limit);
+        size_t getUserLimit() const;
+        bool isAtCapacity() const;
+        std::string getModes() const;
 };
 
 #endif
